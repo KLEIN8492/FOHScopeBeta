@@ -189,10 +189,10 @@ void MainComponent::showSettings()
         SettingsWindow::Hooks h;
         h.get = [this]() -> const Settings& { return settings; };
         h.set = [this](const Settings& s) { apply(s); };
-        h.splMicZSlow = [this]() -> std::optional<double> {
+        h.splMicSlow = [this](int weighting) -> std::optional<double> {
             const auto& f = analyser.latest();
             if (!f.splValid) return std::nullopt;
-            return f.spl.slow[0];
+            return f.spl.slow[size_t(juce::jlimit(0, 2, weighting))];
         };
         settingsWindow = std::make_unique<SettingsWindow>(devices, std::move(h));
     }

@@ -27,9 +27,17 @@ public:
         slider(displayTop, -40, 20, 1, " dBFS", [](Settings& s, double v) { s.displayTop = float(v); });
         slider(displayRange, 30, 150, 5, " dB", [](Settings& s, double v) { s.displayRange = float(v); });
 
-        for (auto* b : { &cal94, &cal114, &openLogs }) addAndMakeVisible(*b);
-        cal94.onClick = [this] { calibrate(94.0); };
-        cal114.onClick = [this] { calibrate(114.0); };
+        for (auto* b : { &cal94, &cal114, &refSet, &openLogs }) addAndMakeVisible(*b);
+        cal94.onClick = [this] { calibrate(94.0, 0, "calibrator"); };
+        cal114.onClick = [this] { calibrate(114.0, 0, "calibrator"); };
+        // Reference: a trusted meter (or a known ambient) says the room is X dB(A) right now.
+        refLevel.setSliderStyle(juce::Slider::LinearHorizontal);
+        refLevel.setTextBoxStyle(juce::Slider::TextBoxRight, false, 90, 22);
+        refLevel.setRange(20, 140, 0.1);
+        refLevel.setValue(94, juce::dontSendNotification);
+        refLevel.setTextValueSuffix(" dB(A)");
+        addAndMakeVisible(refLevel);
+        refSet.onClick = [this] { calibrate(refLevel.getValue(), 1, "reference"); };
         openLogs.onClick = [] {
             const auto dir = Settings::directory().getChildFile("levels");
             dir.createDirectory();
@@ -59,6 +67,7 @@ public:
                           juce::dontSendNotification);
         cal94.setEnabled(mic != nullptr);
         cal114.setEnabled(mic != nullptr);
+        refSet.setEnabled(mic != nullptr);
     }
 
     void paint(juce::Graphics& g) override
@@ -96,6 +105,10 @@ public:
         labels.push_back({ y, "Calibrator on the mic" });
         cal94.setBounds(190, y, 110, 26);
         cal114.setBounds(306, y, 110, 26);
+        y += 32;
+        labels.push_back({ y, "Room reads now (LA Slow)" });
+        refLevel.setBounds(190, y, getWidth() - 206 - 92, 26);
+        refSet.setBounds(getWidth() - 16 - 86, y, 86, 26);
         y += 32;
         row("Offset (dB SPL at 0 dB RMS)", offset);
         heading("NOISE LIMITS (sliding 15 min)");
@@ -147,21 +160,23 @@ private:
         hooks.set(s);
     }
 
-    void calibrate(double level)
+    // offset = known level − what the mic reads now (same weighting, Slow).
+    void calibrate(double level, int weighting, const juce::String& method)
     {
-        const auto z = hooks.splMicZSlow();
-        if (!z || *z < -100) {
+        const auto z = hooks.splMicSlow(weighting);
+        if (!z || *z < -130) {
             calStatus.setText("No signal on the SPL mic: is the calibrator on and the input live?", juce::dontSendNotification);
             return;
         }
-        edit([&](Settings& s) { s.splOffset = level - *z; s.calibration = "calibrator"; });
+        edit([&](Settings& s) { s.splOffset = level - *z; s.calibration = method; });
         refresh();
     }
 
     Hooks hooks;
     juce::ComboBox deltaA, deltaB, history;
     juce::Slider offset, laeq, lceq, threshold, hold, floorDb, topDb, displayTop, displayRange;
-    juce::TextButton cal94 { "94 dB" }, cal114 { "114 dB" }, openLogs { "Open log folder" };
+    juce::TextButton cal94 { "94 dB" }, cal114 { "114 dB" }, refSet { "Set" }, openLogs { "Open log folder" };
+    juce::Slider refLevel;
     juce::Label calStatus;
     std::vector<std::pair<int, juce::String>> headings, labels;
 };

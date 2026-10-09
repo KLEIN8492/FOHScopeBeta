@@ -16,7 +16,8 @@ public:
     {
         std::function<const Settings&()> get;
         std::function<void(const Settings&)> set;
-        std::function<std::optional<double>()> splMicZSlow; // dB re FS RMS of the SPL mic now
+        // Slow level of the SPL mic now, dB re FS RMS: weighting 0 = Z, 1 = A, 2 = C.
+        std::function<std::optional<double>(int weighting)> splMicSlow;
     };
 
     SettingsWindow(juce::AudioDeviceManager&, Hooks);

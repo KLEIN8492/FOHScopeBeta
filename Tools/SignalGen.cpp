@@ -26,7 +26,12 @@ public:
     void audioDeviceAboutToStart(juce::AudioIODevice* d) override
     {
         sr = d->getCurrentSampleRate();
+        // Called again when the device restarts (e.g. another app changes BlackHole's rate):
+        // every piece of state must start over at the new rate.
         delay.assign(size_t(sr), 0.0f);
+        pos = 0;
+        t = 0;
+        st.reset();
         shelf = highShelf(2000, 6, sr);
         l.setSeed(1);
         r.setSeed(2);
@@ -83,7 +88,7 @@ int main(int argc, char** argv)
     }
     Gen gen;
     dm.addAudioCallback(&gen);
-    std::cout << "Playing into " << name << " for " << seconds << " s (ch1 mic sim, ch2/3 pink)\n";
+    std::cout << "Playing into " << name << " for " << seconds << " s (ch1 mic sim, ch2/3 pink)" << std::endl;
     juce::Thread::sleep(int(seconds * 1000));
     dm.removeAudioCallback(&gen);
     return 0;
