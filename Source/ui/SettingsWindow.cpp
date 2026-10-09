@@ -163,16 +163,15 @@ private:
     std::vector<std::pair<int, juce::String>> headings, labels;
 };
 
-SettingsWindow::SettingsWindow(juce::AudioDeviceManager& dm, Hooks h) : juce::DocumentWindow("FOHScope Settings", panel, closeButton)
+SettingsWindow::SettingsWindow(DeviceHub& hub, Analyser& analyser, Hooks h) : juce::DocumentWindow("FOHScope Settings", panel, closeButton)
 {
-    auto* tabs = new juce::TabbedComponent(juce::TabbedButtonBar::TabsAtTop);
+    tabs = new juce::TabbedComponent(juce::TabbedButtonBar::TabsAtTop);
     tabs->setTabBarDepth(32);
-    routing = std::make_unique<RoutingPage>(RoutingPage::Hooks { h.get, h.set, h.channelNames, h.takePeak });
+    routing = std::make_unique<RoutingPage>(hub, analyser, RoutingPage::Hooks { h.get, h.set, h.setRoutingVisible });
     tabs->addTab(utf8("Inputs & Routing"), panel, routing.get(), false);
 
-    auto* audio = new juce::AudioDeviceSelectorComponent(dm, 1, 256, 0, 0, false, false, false, false);
-    audio->setSize(560, 520);
-    tabs->addTab("Audio", panel, audio, true);
+    audio = std::make_unique<AudioPage>(hub, AudioPage::Hooks { h.get, h.set });
+    tabs->addTab("Audio", panel, audio.get(), false);
 
     measurement = std::make_unique<Measurement>(std::move(h));
     measurement->setSize(560, 100);
@@ -184,15 +183,22 @@ SettingsWindow::SettingsWindow(juce::AudioDeviceManager& dm, Hooks h) : juce::Do
     setContentOwned(tabs, false);
     setResizable(true, false);
     setUsingNativeTitleBar(true);
-    centreWithSize(820, 680);
+    centreWithSize(900, 700);
     measurement->setSize(580, 100);
 }
 
 SettingsWindow::~SettingsWindow() { clearContentComponent(); }
 
+void SettingsWindow::addInput()
+{
+    tabs->setCurrentTabIndex(0);
+    routing->addInput();
+}
+
 void SettingsWindow::refresh()
 {
     routing->refresh();
+    audio->refresh();
     measurement->refresh();
 }
 

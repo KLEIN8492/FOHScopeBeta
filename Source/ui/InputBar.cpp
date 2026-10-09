@@ -12,7 +12,7 @@ public:
     {
         setRepaintsOnMouseActivity(true);
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        setTooltip("Click: focus. Right-click: rename, channel, colour, SPL mic, delta, remove. Patch: Settings > Inputs & Routing");
+        setTooltip("Click: focus. Right-click: rename, channel, colour, SPL mic, delta, remove. Full routing: CMD+,");
     }
 
     int preferredWidth() const
@@ -25,7 +25,7 @@ public:
     void paint(juce::Graphics& g) override
     {
         const bool focused = bar.state.inputs.focusedId == input.id;
-        const bool live = input.channel < bar.state.channelNames.size();
+        const bool live = bar.isLive(input.port);
         auto r = getLocalBounds();
         if (focused || isMouseOver()) {
             g.setColour(well);
@@ -49,7 +49,7 @@ public:
             inner.removeFromLeft(4);
             const int w = juce::roundToInt(juce::GlyphArrangement::getStringWidth(mono(9.5f), t)) + 6;
             const auto tag = inner.removeFromLeft(w).withSizeKeepingCentre(w, 14);
-            const auto c = t.startsWith("NO CH") ? red : (t == "SPL" ? amber : accent);
+            const auto c = t == "OFFLINE" || t == "NOT PATCHED" ? red : (t == "SPL" ? amber : accent);
             g.setColour(c);
             g.drawRect(tag);
             g.setFont(mono(9.5f));
@@ -73,7 +73,8 @@ private:
         const auto& l = bar.state.inputs;
         if (l.deltaA == input.id) t.add("A");
         if (l.deltaB == input.id) t.add("B");
-        if (input.channel >= bar.state.channelNames.size()) t.add("NO CH " + juce::String(input.channel + 1));
+        if (!input.port.valid()) t.add("NOT PATCHED");
+        else if (!bar.isLive(input.port)) t.add("OFFLINE");
         return t;
     }
 
@@ -90,8 +91,8 @@ InputBar::InputBar()
         b.setTooltip(tip);
         addAndMakeVisible(b);
     };
-    setup(add, "Add an input (up to 16)");
-    add.onClick = [this] { change([this](InputList& l) { if (int id = l.add(state.channelNames.size()); id > 0) l.focusedId = id; }); };
+    setup(add, "Add an input: opens Inputs & Routing (up to 16)");
+    add.onClick = [this] { if (onAdd) onAdd(); };
 
     setup(fast, utf8("Fast averaging (≈125 ms). A cycles"));
     setup(slow, "Slow averaging (1 s). A cycles");
@@ -123,7 +124,12 @@ InputBar::InputBar()
 
 void InputBar::setState(const State& s)
 {
-    const bool chipsChanged = !(s.inputs == state.inputs) || s.channelNames != state.channelNames;
+    auto statesOf = [](const State& st) {
+        juce::StringArray k;
+        for (auto& i : st.interfaces) k.add(i.name + "/" + juce::String(int(i.state)) + "/" + juce::String(i.inputs.size()));
+        return k;
+    };
+    const bool chipsChanged = !(s.inputs == state.inputs) || statesOf(s) != statesOf(state);
     state = s;
     fast.setToggleState(s.averaging == Averaging::Fast, juce::dontSendNotification);
     slow.setToggleState(s.averaging == Averaging::Slow, juce::dontSendNotification);
@@ -186,6 +192,19 @@ void InputBar::resized()
     add.setBounds(r.removeFromLeft(34).reduced(5, 5));
 }
 
+const DeviceHub::Info* InputBar::interfaceInfo(const juce::String& name) const
+{
+    for (auto& i : state.interfaces)
+        if (i.name == name) return &i;
+    return nullptr;
+}
+
+bool InputBar::isLive(const PortRef& p) const
+{
+    const auto* i = p.valid() ? interfaceInfo(p.device) : nullptr;
+    return i && i->state == DeviceHub::State::open && p.channel < i->inputs.size();
+}
+
 void InputBar::change(const std::function<void(InputList&)>& edit)
 {
     auto l = state.inputs;
@@ -197,10 +216,16 @@ void InputBar::showMenu(int id)
 {
     const auto* in = state.inputs.find(id);
     if (!in) return;
+    // Channel: interface > channel. Item ids 100000 + index into `ports`.
     juce::PopupMenu m, channels, colours;
-    for (int ch = 0; ch < std::max(state.channelNames.size(), in->channel + 1); ++ch) {
-        const auto name = ch < state.channelNames.size() ? state.channelNames[ch] : juce::String("(not on this device)");
-        channels.addItem(1000 + ch, juce::String(ch + 1) + "  " + name, true, ch == in->channel);
+    std::vector<PortRef> ports;
+    for (const auto& iface : state.interfaces) {
+        juce::PopupMenu sub;
+        for (int ch = 0; ch < iface.inputs.size(); ++ch) {
+            ports.push_back({ iface.name, ch });
+            sub.addItem(100000 + int(ports.size()) - 1, juce::String(ch + 1) + "  " + iface.inputs[ch], true, in->port == ports.back());
+        }
+        channels.addSubMenu(iface.name, sub, true, nullptr, in->port.device == iface.name);
     }
     for (int c = 0; c < Palette::kDistinctHues; ++c)
         colours.addColouredItem(2000 + c, "Colour " + juce::String(c + 1), Palette::colour(c), true, Palette::colour(c) == in->colour);
@@ -217,15 +242,15 @@ void InputBar::showMenu(int id)
     m.addItem(4, "Delta A (mic)", true, state.inputs.deltaA == id);
     m.addItem(5, "Delta B (reference)", true, state.inputs.deltaB == id);
     m.addSeparator();
-    m.addItem(6, "Remove", state.inputs.inputs.size() > 1);
+    m.addItem(6, "Remove");
 
-    m.showMenuAsync(juce::PopupMenu::Options(), [this, id](int r) {
+    m.showMenuAsync(juce::PopupMenu::Options(), [this, id, ports](int r) {
         if (r == 0) return;
         if (r == 1) { rename(id); return; }
-        change([r, id](InputList& l) {
+        change([r, id, ports](InputList& l) {
             auto* i = l.find(id);
             if (!i) return;
-            if (r >= 1000 && r < 2000) i->channel = r - 1000;
+            if (r >= 100000 && r - 100000 < int(ports.size())) i->port = ports[size_t(r - 100000)];
             else if (r >= 2000 && r < 2999) i->colour = Palette::colour(r - 2000);
             else if (r == 2999) i->colour = Palette::colour(l.nextColour++);
             else if (r == 2) i->muted = !i->muted;

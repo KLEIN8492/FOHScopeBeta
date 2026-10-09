@@ -1,4 +1,5 @@
 #pragma once
+#include "core/DeviceHub.h"
 #include "core/Inputs.h"
 #include "dsp/MtwSpectrum.h"
 #include "ui/Theme.h"
@@ -14,7 +15,7 @@ public:
     struct State
     {
         InputList inputs;
-        juce::StringArray channelNames; // device input channel names
+        std::vector<DeviceHub::Info> interfaces; // catalogue + states
         Averaging averaging = Averaging::Slow;
         int bandsPerOctave = 3;
         bool bars = true, delta = false, frozen = false;
@@ -24,7 +25,7 @@ public:
     std::function<void(const InputList&)> onInputs;
     std::function<void(Averaging)> onAveraging;
     std::function<void(int)> onResolution;
-    std::function<void()> onBars, onDelta, onFreeze, onCapture, onClearCaptures, onSettings;
+    std::function<void()> onBars, onDelta, onFreeze, onCapture, onClearCaptures, onSettings, onAdd;
 
     InputBar();
     ~InputBar() override;
@@ -38,6 +39,8 @@ private:
     void showMenu(int id);
     void rename(int id);
     void change(const std::function<void(InputList&)>& edit);
+    const DeviceHub::Info* interfaceInfo(const juce::String& name) const;
+    bool isLive(const PortRef&) const;
 
     State state;
     std::vector<std::unique_ptr<Chip>> chips;

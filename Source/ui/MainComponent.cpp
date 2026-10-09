@@ -30,18 +30,20 @@ MainComponent::MainComponent()
     bar.onCapture = [this] { capture(); };
     bar.onClearCaptures = [this] { captures.clear(); updateBar(); spectrum.repaint(); };
     bar.onSettings = [this] { showSettings(); };
+    bar.onAdd = [this] {
+        showSettings();
+        settingsWindow->addInput();
+    };
 
-    devices.addChangeListener(this);
-    // macOS asks for microphone access once; until it is granted every input reads silence.
-    // Opened after the window is up: a driver that is slow to answer (coreaudiod still cleaning
-    // up a crashed client, an interface waking up) must not leave you staring at no window.
-    juce::MessageManager::callAsync([safe = juce::Component::SafePointer(this)] {
-        if (safe)
-            juce::RuntimePermissions::request(juce::RuntimePermissions::recordAudio, [safe](bool) {
-                if (safe) safe->openDevice();
-            });
-    });
+    hub.onChanged = [this] { devicesChanged(); };
+    hub.setFormat(settings.sampleRate, settings.bufferSize);
     analyser.startAnalysis();
+    hub.start(); // scans and opens on its own thread: the window never waits for a driver
+    // macOS asks for microphone access once; until it is answered nothing is opened (inputs
+    // would read silence).
+    juce::RuntimePermissions::request(juce::RuntimePermissions::recordAudio, [safe = juce::Component::SafePointer(this)](bool) {
+        if (safe) safe->hub.setOpeningAllowed(true);
+    });
     apply(settings);
     setSize(1400, 860);
     startTimerHz(60);
@@ -50,44 +52,31 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
-    devices.removeChangeListener(this);
-    devices.removeAudioCallback(&analyser);
-    analyser.stopAnalysis();
-    if (auto xml = devices.createStateXml()) settings.deviceState = std::move(xml);
+    hub.onChanged = nullptr;
+    settingsWindow = nullptr;
     settings.save();
 }
 
-void MainComponent::openDevice()
+// Interfaces appeared / disappeared / changed state (hub, message thread).
+void MainComponent::devicesChanged()
 {
-    // Ask for every input the device has (256 = "all"): inputs then pick any channel freely.
-    const auto err = devices.initialise(256, 0, settings.deviceState.get(), true);
-    devices.removeAudioCallback(&analyser);
-    devices.addAudioCallback(&analyser);
-    if (err.isNotEmpty()) DBG("Audio: " << err);
-    updateBar();
-}
-
-void MainComponent::changeListenerCallback(juce::ChangeBroadcaster*)
-{
-    const bool lost = devices.getCurrentAudioDevice() == nullptr;
+    interfaces = hub.snapshot();
+    updateWanted(); // the catalogue may have changed what "all interfaces" means
+    const bool lost = std::any_of(interfaces.begin(), interfaces.end(), [](auto& i) {
+        return i.wanted && (i.state == DeviceHub::State::missing || i.state == DeviceHub::State::error) && i.name.isNotEmpty();
+    });
     if (lost != deviceLost) {
         deviceLost = lost;
         resized();
     }
-    if (!deviceLost)
-        if (auto xml = devices.createStateXml()) {
-            settings.deviceState = std::move(xml);
-            settings.save();
-        }
     updateBar();
-    if (settingsWindow) settingsWindow->refresh(); // the routing rows follow the device's channels
-    repaint();
+    if (settingsWindow) settingsWindow->refresh();
+    repaint(0, 0, getWidth(), kStatusHeight + kBarHeight + kBannerHeight);
 }
 
-juce::StringArray MainComponent::channelNames() const
+void MainComponent::updateWanted()
 {
-    if (auto* d = devices.getCurrentAudioDevice()) return d->getInputChannelNames();
-    return {};
+    hub.setWanted(wantedDevices(settings.inputs, routingVisible, hub.availableNames()));
 }
 
 void MainComponent::apply(const Settings& s)
@@ -99,8 +88,11 @@ void MainComponent::apply(const Settings& s)
     analyser.setPeakParams(settings.peaks);
     analyser.setSplOffset(settings.splOffset);
     spectrograph.configure(settings.spectrogramSeconds, settings.spectrogramFloor, settings.spectrogramTop);
+    hub.setFormat(settings.sampleRate, settings.bufferSize);
+    updateWanted();
     settings.save();
     updateBar();
+    showFrame(analyser.latest(), true); // inputs / display changed: redraw even without new audio
     if (settingsWindow) settingsWindow->refresh();
 }
 
@@ -108,7 +100,7 @@ void MainComponent::updateBar()
 {
     InputBar::State st;
     st.inputs = settings.inputs;
-    st.channelNames = channelNames();
+    st.interfaces = interfaces;
     st.averaging = settings.averaging;
     st.bandsPerOctave = settings.bandsPerOctave;
     st.bars = settings.showBars;
@@ -121,13 +113,6 @@ void MainComponent::updateBar()
 
 void MainComponent::timerCallback()
 {
-    // Device gone (unplugged interface): retry every 2 s with the saved setup.
-    const auto now = juce::Time::getMillisecondCounter();
-    if (deviceLost && now - lastRetryMs > 2000) {
-        lastRetryMs = now;
-        openDevice();
-    }
-
     const auto& f = analyser.latest();
     const bool fresh = f.seq != lastSeq;
     lastSeq = f.seq;
@@ -143,6 +128,13 @@ void MainComponent::timerCallback()
     }
     if (frozen || !fresh) return;
 
+    // Sound level meters display at 10 Hz (readable digits); the analyser publishes at 30.
+    showFrame(f, ++sideDivider >= 3);
+    if (sideDivider >= 3) sideDivider = 0;
+}
+
+void MainComponent::showFrame(const Frame& f, bool withSidePanel)
+{
     SpectrumView::View v;
     v.showBars = settings.showBars;
     v.showDelta = settings.showDelta;
@@ -150,11 +142,7 @@ void MainComponent::timerCallback()
     v.range = settings.displayRange;
     v.bandsPerOctave = settings.bandsPerOctave;
     spectrum.setData(f, settings.inputs, v);
-    // Sound level meters display at 10 Hz (readable digits); the analyser publishes at 30.
-    if (++sideDivider >= 3) {
-        sideDivider = 0;
-        side.setData(f, settings.inputs, { settings.limitLAeq15, settings.limitLCeq15, settings.calibration, logStatus });
-    }
+    if (withSidePanel) side.setData(f, settings.inputs, { settings.limitLAeq15, settings.limitLCeq15, settings.calibration, logStatus });
 }
 
 void MainComponent::logLevels(const Frame& f)
@@ -195,9 +183,11 @@ void MainComponent::showSettings()
             if (!f.splValid) return std::nullopt;
             return f.spl.slow[size_t(juce::jlimit(0, 2, weighting))];
         };
-        h.channelNames = [this] { return channelNames(); };
-        h.takePeak = [this](int ch) { return analyser.takeChannelPeak(ch); };
-        settingsWindow = std::make_unique<SettingsWindow>(devices, std::move(h));
+        h.setRoutingVisible = [this](bool visible) {
+            routingVisible = visible;
+            updateWanted();
+        };
+        settingsWindow = std::make_unique<SettingsWindow>(hub, analyser, std::move(h));
     }
     settingsWindow->refresh();
     settingsWindow->setVisible(true);
@@ -253,14 +243,18 @@ void MainComponent::paint(juce::Graphics& g)
     g.setFont(mono(11, true));
     item("FOHSCOPE", text);
     g.setFont(mono(11));
-    if (auto* d = devices.getCurrentAudioDevice()) {
-        item(d->getName(), text);
-        item(juce::String(d->getCurrentSampleRate() / 1000.0, 1) + " kHz / " + juce::String(d->getCurrentBufferSizeSamples()), dim);
-        item(juce::String(d->getInputChannelNames().size()) + " ch in", dim);
-    } else {
-        item("NO DEVICE", red);
+    item(juce::String(settings.sampleRate / 1000.0, 1) + " kHz / " + juce::String(settings.bufferSize), dim);
+    // One item per interface in use, coloured by its state.
+    for (const auto& i : interfaces) {
+        if (!i.wanted || (routingVisible && !std::any_of(settings.inputs.inputs.begin(), settings.inputs.inputs.end(),
+                                                          [&](auto& in) { return in.port.device == i.name; })))
+            continue;
+        const bool good = i.state == DeviceHub::State::open, busy = i.state == DeviceHub::State::opening;
+        item(i.name.toUpperCase() + (good ? "" : busy ? " opening" : i.state == DeviceHub::State::missing ? " missing" : " error"),
+             good ? text : busy ? amber : red);
     }
-    item(juce::String(int(settings.inputs.inputs.size())) + " traces", dim);
+    if (settings.inputs.inputs.empty()) item("NO INPUTS", amber);
+    else item(juce::String(int(settings.inputs.inputs.size())) + " traces", dim);
     if (settings.inputs.splMic()) item(logStatus.isEmpty() ? "LOG OK" : "LOG FAIL", logStatus.isEmpty() ? ok : red);
     if (frozen) item("FROZEN", amber);
     g.setColour(dim);
@@ -272,7 +266,11 @@ void MainComponent::paint(juce::Graphics& g)
         g.fillRect(banner);
         g.setColour(juce::Colours::white);
         g.setFont(mono(11, true));
-        g.drawText(utf8("AUDIO DEVICE LOST — RECONNECTING EVERY 2 S"), banner.reduced(10, 0), juce::Justification::centredLeft);
+        juce::StringArray lost;
+        for (auto& i : interfaces)
+            if (i.wanted && (i.state == DeviceHub::State::missing || i.state == DeviceHub::State::error)) lost.add(i.name.toUpperCase());
+        g.drawText(utf8("INTERFACE LOST: ") + lost.joinIntoString(", ") + utf8(" — REOPENING AUTOMATICALLY"), banner.reduced(10, 0),
+                   juce::Justification::centredLeft);
     }
 }
 

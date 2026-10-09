@@ -151,6 +151,12 @@ void SpectrumView::paint(juce::Graphics& g)
     if (pinnedHz > 0) paintCursor(g, axis.x(pinnedHz), true);
     if (hoverX >= plot.getX() && hoverX <= plot.getRight()) paintCursor(g, hoverX, false);
 
+    if (inputs.inputs.empty()) {
+        g.setColour(dim);
+        g.setFont(mono(13));
+        g.drawText("NO INPUTS  -  CMD+, TO ADD ONE", plot, juce::Justification::centred);
+    }
+
     if (view.frozen) {
         auto badge = juce::Rectangle<float>(plot.getRight() - 86, plot.getY() + 6, 80, 22);
         g.setColour(amber);

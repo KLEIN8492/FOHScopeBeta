@@ -1,5 +1,6 @@
 #pragma once
 #include "core/Analyser.h"
+#include "core/DeviceHub.h"
 #include "core/LevelLogger.h"
 #include "core/Settings.h"
 #include "ui/InputBar.h"
@@ -10,7 +11,7 @@
 
 namespace fs {
 
-class MainComponent : public juce::Component, private juce::Timer, private juce::ChangeListener
+class MainComponent : public juce::Component, private juce::Timer
 {
 public:
     MainComponent();
@@ -25,16 +26,18 @@ public:
 
 private:
     void timerCallback() override;
-    void changeListenerCallback(juce::ChangeBroadcaster*) override;
     void apply(const Settings&);   // push settings to analyser + views, save
-    void openDevice();
+    void devicesChanged();
+    void updateWanted();
     void logLevels(const Frame&);
     void capture();
     void updateBar();
-    juce::StringArray channelNames() const;
+    void showFrame(const Frame&, bool withSidePanel);
 
-    juce::AudioDeviceManager devices;
     Analyser analyser;
+    DeviceHub hub { analyser }; // after the analyser: closes every interface before it goes
+    std::vector<DeviceHub::Info> interfaces;
+    bool routingVisible = false;
     Settings settings;
     LevelLogger logger { Settings::directory().getChildFile("levels") };
     juce::String logStatus;
@@ -50,7 +53,7 @@ private:
     std::vector<SpectrumView::Capture> captures;
     bool frozen = false;
     uint64_t lastSeq = 0;
-    juce::uint32 lastLogMs = 0, lastRetryMs = 0;
+    juce::uint32 lastLogMs = 0;
     bool deviceLost = false;
     std::vector<float> column;
 };
