@@ -45,39 +45,44 @@ public:
         for (int j = 0; j < n; ++j) {
             const auto& in = inputs.inputs[size_t(j)];
             const auto card = headerCard(j);
-            g.setColour(panelHi);
-            g.fillRoundedRectangle(card.toFloat(), 5);
-            g.setColour(in.muted ? dim : in.colour);
-            g.fillEllipse(dotRect(j).toFloat().reduced(2));
+            g.setColour(well);
+            g.fillRect(card);
+            g.setColour(in.muted ? line : in.colour);
+            g.fillRect(card.withHeight(2));
+            g.setColour(line);
+            g.drawRect(card);
+            swatch(g, dotRect(j).reduced(3), in.muted ? dim : in.colour);
             g.setColour(in.muted ? dim : text);
-            g.setFont(sans(13, true));
-            g.drawText(in.name, nameRect(j), juce::Justification::centredLeft, true);
+            g.setFont(mono(11, true));
+            g.drawText(in.name.toUpperCase(), nameRect(j), juce::Justification::centredLeft, true);
             if (in.channel >= channels.size()) {
                 g.setColour(red);
-                g.setFont(sans(10.5f));
+                g.setFont(mono(10));
                 g.drawText("no ch " + juce::String(in.channel + 1), card.withTrimmedTop(30).withHeight(14).reduced(8, 0),
                            juce::Justification::centredLeft);
             }
-            pill(g, splRect(j), "SPL", in.splMic, amber);
-            pill(g, showRect(j), in.muted ? "Hidden" : "Shown", !in.muted, in.colour);
-            pill(g, removeRect(j), utf8("×"), false, red, n > 1);
+            tag(g, splRect(j), "SPL", in.splMic, amber);
+            tag(g, showRect(j), in.muted ? "HIDDEN" : "SHOWN", !in.muted, accent);
+            tag(g, removeRect(j), "X", false, red, n > 1);
         }
         const auto add = addRect();
         const bool canAdd = n < InputList::kMax;
-        g.setColour(isMouseOver() && add.contains(getMouseXYRelative()) && canAdd ? panelHi.brighter(0.2f) : panelHi);
-        g.fillRoundedRectangle(add.toFloat(), 5);
+        g.setColour(well);
+        g.fillRect(add);
+        g.setColour(isMouseOver() && add.contains(getMouseXYRelative()) && canAdd ? dim : line);
+        g.drawRect(add);
         g.setColour(canAdd ? text : dim);
-        g.setFont(sans(13, true));
-        g.drawText("+ Add input", add, juce::Justification::centred);
+        g.setFont(mono(11));
+        g.drawText("+ ADD INPUT", add, juce::Justification::centred);
 
-        g.setColour(dim);
-        g.setFont(sans(11, true));
-        g.drawText("DEVICE INPUT", 12, kHeader - 20, 120, 16, juce::Justification::centredLeft);
-        g.drawText("LEVEL", kMeterX, kHeader - 20, kMeterW, 16, juce::Justification::centredLeft);
+        caption(g, "Device input", { 12, kHeader - 20, 120, 16 });
+        caption(g, "Level", { kMeterX, kHeader - 20, kMeterW, 16 });
+        g.setColour(line);
+        g.drawHorizontalLine(kHeader - 1, 0, float(getWidth()));
 
         if (channels.isEmpty()) {
             g.setColour(amber);
-            g.setFont(sans(13));
+            g.setFont(mono(11));
             g.drawText(utf8("No audio device — choose one in the Audio tab."), 12, kHeader, kLeft + n * kCol, kRow, juce::Justification::centredLeft);
             return;
         }
@@ -86,11 +91,11 @@ public:
         for (int ch = 0; ch < channels.size(); ++ch) {
             const int y = kHeader + ch * kRow;
             if (ch % 2 == 0) {
-                g.setColour(panelHi.withAlpha(0.45f));
+                g.setColour(well.withAlpha(0.6f));
                 g.fillRect(0, y, getWidth(), kRow);
             }
             g.setColour(text);
-            g.setFont(mono(12));
+            g.setFont(mono(11));
             g.drawText(juce::String(ch + 1).paddedLeft(' ', 2) + "  " + channels[ch], 12, y, kMeterX - 18, kRow,
                        juce::Justification::centredLeft, true);
             paintMeter(g, ch, y);
@@ -99,9 +104,11 @@ public:
                 const auto& in = inputs.inputs[size_t(j)];
                 const auto cell = cellRect(ch, j);
                 const bool on = in.channel == ch, hover = isMouseOver() && cell.contains(mouse);
-                g.setColour(on ? in.colour : (hover ? gridStrong.brighter(0.4f) : gridStrong));
-                if (on) g.fillRoundedRectangle(cell.toFloat(), 3);
-                else g.drawRoundedRectangle(cell.toFloat().reduced(0.5f), 3, hover ? 1.5f : 1.0f);
+                if (on) swatch(g, cell, in.colour);
+                else {
+                    g.setColour(hover ? dim : line);
+                    g.drawRect(cell);
+                }
             }
         }
     }
@@ -142,24 +149,24 @@ private:
     juce::Rectangle<int> addRect() const { return { kLeft + int(inputs.inputs.size()) * kCol + 4, 6, kCol - 8, kHeader - 30 }; }
     static juce::Rectangle<int> cellRect(int ch, int j) { return juce::Rectangle<int>(kLeft + j * kCol, kHeader + ch * kRow, kCol, kRow).withSizeKeepingCentre(16, 16); }
 
-    void pill(juce::Graphics& g, juce::Rectangle<int> r, const juce::String& label, bool on, juce::Colour c, bool enabled = true)
+    // VenueTuner .tag: outlined in its colour; filled with black text when on.
+    void tag(juce::Graphics& g, juce::Rectangle<int> r, const juce::String& label, bool on, juce::Colour c, bool enabled = true)
     {
-        g.setColour(on ? c.withAlpha(0.85f) : panel);
-        g.fillRoundedRectangle(r.toFloat(), 4);
-        g.setColour(on ? bg : (enabled ? dim : gridStrong));
-        g.setFont(sans(10.5f, true));
+        const auto col = enabled ? (on ? c : dim) : line;
+        if (on) {
+            g.setColour(col);
+            g.fillRect(r);
+        }
+        g.setColour(col);
+        g.drawRect(r);
+        g.setColour(on ? juce::Colours::black : col);
+        g.setFont(mono(9.5f, on));
         g.drawText(label, r, juce::Justification::centred);
     }
 
     void paintMeter(juce::Graphics& g, int ch, int y)
     {
-        const auto bar = juce::Rectangle<float>(float(kMeterX), float(y + kRow / 2 - 4), float(kMeterW), 8);
-        g.setColour(bg);
-        g.fillRoundedRectangle(bar, 2);
-        const float db = levels[size_t(ch)];
-        const float w = bar.getWidth() * (db - kMeterFloorDb) / -kMeterFloorDb;
-        g.setColour(db > -3 ? red : db > -12 ? amber : green);
-        g.fillRoundedRectangle(bar.withWidth(std::max(0.0f, w)), 2);
+        theme::meter(g, { kMeterX, y + kRow / 2 - 4, kMeterW, 8 }, levels[size_t(ch)]);
     }
 
     void colourMenu(int id)
@@ -248,18 +255,16 @@ void RoutingPage::paint(juce::Graphics& g)
 {
     g.fillAll(panel);
     auto r = getLocalBounds().removeFromBottom(64).reduced(16, 8);
-    g.setColour(gridStrong);
+    g.setColour(line);
     g.drawHorizontalLine(getHeight() - 64, 0, float(getWidth()));
+    caption(g, utf8("Delta trace  (A − B, B delayed to line up with A)"), r.removeFromTop(18));
+    g.setFont(mono(11));
     g.setColour(dim);
-    g.setFont(sans(12, true));
-    g.drawText(utf8("DELTA TRACE  (A − B, B delayed to line up with A)"), r.removeFromTop(18), juce::Justification::centredLeft);
-    g.setFont(sans(13));
-    g.setColour(text);
     auto row = r.removeFromTop(28);
-    g.drawText("A (FOH mic)", row.removeFromLeft(90), juce::Justification::centredLeft);
+    g.drawText("A  FOH MIC", row.removeFromLeft(90), juce::Justification::centredLeft);
     row.removeFromLeft(170);
     row.removeFromLeft(24);
-    g.drawText("B (console)", row.removeFromLeft(90), juce::Justification::centredLeft);
+    g.drawText("B  CONSOLE", row.removeFromLeft(90), juce::Justification::centredLeft);
 }
 
 void RoutingPage::resized()

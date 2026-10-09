@@ -29,12 +29,12 @@ float SpectrumView::y(float dbfs) const
     return plot.getY() + plot.getHeight() * (view.top - dbfs) / view.range;
 }
 
-juce::Path SpectrumView::tracePath(const GridLine& line) const
+juce::Path SpectrumView::tracePath(const GridLine& values) const
 {
     juce::Path p;
     bool started = false;
     for (int i = 0; i < grid::kPoints; ++i) {
-        const float v = line[size_t(i)];
+        const float v = values[size_t(i)];
         if (v < -190.0f) { started = false; continue; }
         const float px = axis.x(grid::freqAt(i)), py = juce::jlimit(plot.getY(), plot.getBottom(), y(v + kAes17));
         if (!started) { p.startNewSubPath(px, py); started = true; }
@@ -154,9 +154,9 @@ void SpectrumView::paint(juce::Graphics& g)
     if (view.frozen) {
         auto badge = juce::Rectangle<float>(plot.getRight() - 86, plot.getY() + 6, 80, 22);
         g.setColour(amber);
-        g.fillRoundedRectangle(badge, 4);
+        g.fillRect(badge);
         g.setColour(bg);
-        g.setFont(sans(12, true));
+        g.setFont(mono(11, true));
         g.drawText("FROZEN", badge, juce::Justification::centred);
     }
 }
@@ -216,8 +216,10 @@ void SpectrumView::paintCursor(juce::Graphics& g, float x, bool pinned)
     const float w = 170, h = 16.0f * float(lines.size()) + 8;
     auto box = juce::Rectangle<float>(x + 10, plot.getY() + (pinned ? 34 : 6), w, h);
     if (box.getRight() > plot.getRight()) box.setX(x - 10 - w);
-    g.setColour(panel.withAlpha(0.92f));
-    g.fillRoundedRectangle(box, 4);
+    g.setColour(well.withAlpha(0.95f));
+    g.fillRect(box);
+    g.setColour(line);
+    g.drawRect(box);
     g.setFont(mono(11.0f));
     for (int i = 0; i < lines.size(); ++i) {
         g.setColour(colours[size_t(i)]);

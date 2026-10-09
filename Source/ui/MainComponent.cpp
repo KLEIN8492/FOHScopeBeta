@@ -5,7 +5,7 @@ namespace fs {
 using namespace theme;
 
 namespace {
-constexpr int kBarHeight = 48, kSideWidth = 250, kMaxCaptures = 6;
+constexpr int kStatusHeight = 20, kBarHeight = 32, kBannerHeight = 24, kSideWidth = 250, kMaxCaptures = 6;
 }
 
 MainComponent::MainComponent()
@@ -26,7 +26,7 @@ MainComponent::MainComponent()
     bar.onResolution = [this](int r) { auto s = settings; s.bandsPerOctave = r; apply(s); };
     bar.onBars = [this] { auto s = settings; s.showBars = !s.showBars; apply(s); };
     bar.onDelta = [this] { auto s = settings; s.showDelta = !s.showDelta; apply(s); };
-    bar.onFreeze = [this] { frozen = !frozen; updateBar(); };
+    bar.onFreeze = [this] { frozen = !frozen; updateBar(); repaint(0, 0, getWidth(), kStatusHeight); };
     bar.onCapture = [this] { capture(); };
     bar.onClearCaptures = [this] { captures.clear(); updateBar(); spectrum.repaint(); };
     bar.onSettings = [this] { showSettings(); };
@@ -214,7 +214,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& k)
     const auto c = juce::CharacterFunctions::toLowerCase(k.getTextCharacter());
     if (k.getModifiers().isCommandDown()) return false; // ⌘ shortcuts are menu commands (Main.cpp)
     auto s = settings;
-    if (k == juce::KeyPress::spaceKey) { frozen = !frozen; updateBar(); spectrum.repaint(); return true; }
+    if (k == juce::KeyPress::spaceKey) { frozen = !frozen; updateBar(); spectrum.repaint(); repaint(0, 0, getWidth(), kStatusHeight); return true; }
     if (c == 'c') { capture(); return true; }
     if (c == 'x') { captures.clear(); updateBar(); spectrum.repaint(); return true; }
     if (c == 'b') { s.showBars = !s.showBars; apply(s); return true; }
@@ -234,24 +234,54 @@ bool MainComponent::keyPressed(const juce::KeyPress& k)
     return false;
 }
 
+// Top status line, VenueTuner style: what is running, at what rate, and whether it is healthy.
 void MainComponent::paint(juce::Graphics& g)
 {
     g.fillAll(bg);
+    auto status = getLocalBounds().removeFromTop(kStatusHeight);
+    g.setColour(statusBg);
+    g.fillRect(status);
+    g.setColour(line);
+    g.drawHorizontalLine(kStatusHeight - 1, 0, float(getWidth()));
+
+    auto r = status.reduced(8, 0);
+    auto item = [&](const juce::String& s, juce::Colour c) {
+        g.setColour(c);
+        const int w = juce::roundToInt(juce::GlyphArrangement::getStringWidth(mono(11), s)) + 14;
+        g.drawText(s, r.removeFromLeft(w), juce::Justification::centredLeft);
+    };
+    g.setFont(mono(11, true));
+    item("FOHSCOPE", text);
+    g.setFont(mono(11));
+    if (auto* d = devices.getCurrentAudioDevice()) {
+        item(d->getName(), text);
+        item(juce::String(d->getCurrentSampleRate() / 1000.0, 1) + " kHz / " + juce::String(d->getCurrentBufferSizeSamples()), dim);
+        item(juce::String(d->getInputChannelNames().size()) + " ch in", dim);
+    } else {
+        item("NO DEVICE", red);
+    }
+    item(juce::String(int(settings.inputs.inputs.size())) + " traces", dim);
+    if (settings.inputs.splMic()) item(logStatus.isEmpty() ? "LOG OK" : "LOG FAIL", logStatus.isEmpty() ? ok : red);
+    if (frozen) item("FROZEN", amber);
+    g.setColour(dim);
+    g.drawText("CMD+, SETUP", status.reduced(8, 0), juce::Justification::centredRight);
+
     if (deviceLost) {
-        auto r = getLocalBounds().removeFromTop(kBarHeight + 28).removeFromBottom(28);
-        g.setColour(red.withAlpha(0.85f));
-        g.fillRect(r);
+        auto banner = getLocalBounds().withTrimmedTop(kStatusHeight + kBarHeight).removeFromTop(kBannerHeight);
+        g.setColour(red);
+        g.fillRect(banner);
         g.setColour(juce::Colours::white);
-        g.setFont(sans(13, true));
-        g.drawText(utf8("Audio device lost — reconnecting…"), r, juce::Justification::centred);
+        g.setFont(mono(11, true));
+        g.drawText(utf8("AUDIO DEVICE LOST — RECONNECTING EVERY 2 S"), banner.reduced(10, 0), juce::Justification::centredLeft);
     }
 }
 
 void MainComponent::resized()
 {
     auto r = getLocalBounds();
+    r.removeFromTop(kStatusHeight);
     bar.setBounds(r.removeFromTop(kBarHeight));
-    if (deviceLost) r.removeFromTop(28);
+    if (deviceLost) r.removeFromTop(kBannerHeight);
     side.setBounds(r.removeFromRight(kSideWidth));
     spectrum.setBounds(r.removeFromTop(juce::roundToInt(float(r.getHeight()) * 0.62f)));
     spectrograph.setBounds(r);

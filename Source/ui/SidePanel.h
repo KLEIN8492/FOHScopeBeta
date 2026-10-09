@@ -20,8 +20,8 @@ public:
     void paint(juce::Graphics&) override;
 
 private:
-    void paintSpl(juce::Graphics&, juce::Rectangle<float>);
-    void paintPeaks(juce::Graphics&, juce::Rectangle<float>);
+    void paintSpl(juce::Graphics&, juce::Rectangle<int>);
+    void paintPeaks(juce::Graphics&, juce::Rectangle<int>);
 
     Frame frame;
     InputList inputs;

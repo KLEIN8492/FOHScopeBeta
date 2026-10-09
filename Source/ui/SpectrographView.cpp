@@ -65,12 +65,12 @@ void SpectrographView::paint(juce::Graphics& g)
                    juce::Justification::centredRight);
     }
     if (label.isNotEmpty()) {
-        g.setColour(panel.withAlpha(0.8f));
+        g.setColour(well.withAlpha(0.85f));
         auto r = juce::Rectangle<float>(plot.getX() + 6, plot.getY() + 6, 200, 18);
-        g.fillRoundedRectangle(r, 3);
+        g.fillRect(r);
         g.setColour(labelColour);
-        g.setFont(sans(11.5f, true));
-        g.drawText(label, r.reduced(6, 0), juce::Justification::centredLeft);
+        g.setFont(mono(10.5f, true));
+        g.drawText(label.toUpperCase(), r.reduced(6, 0), juce::Justification::centredLeft);
     }
 }
 

@@ -4,6 +4,7 @@ namespace fs {
 
 using namespace theme;
 
+// One input: square swatch, number, name, state tags. Focused = its colour underlines it.
 class InputBar::Chip : public juce::Component, public juce::SettableTooltipClient
 {
 public:
@@ -11,34 +12,49 @@ public:
     {
         setRepaintsOnMouseActivity(true);
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        setTooltip(utf8("Click: focus · Right-click: rename, channel, colour, SPL mic, delta, remove"));
+        setTooltip("Click: focus. Right-click: rename, channel, colour, SPL mic, delta, remove. Patch: Settings > Inputs & Routing");
     }
 
     int preferredWidth() const
     {
-        juce::GlyphArrangement ga;
-        ga.addLineOfText(sans(13, true), label(), 0, 0);
-        return int(ga.getBoundingBox(0, -1, true).getWidth()) + 44;
+        int w = 10 + 10 + 6 + juce::roundToInt(juce::GlyphArrangement::getStringWidth(mono(11), label())) + 10;
+        for (auto& t : tags()) w += juce::roundToInt(juce::GlyphArrangement::getStringWidth(mono(9.5f), t)) + 10;
+        return w;
     }
 
     void paint(juce::Graphics& g) override
     {
         const bool focused = bar.state.inputs.focusedId == input.id;
-        auto r = getLocalBounds().toFloat().reduced(1, 6);
-        g.setColour(focused ? panelHi.brighter(0.15f) : (isMouseOver() ? panelHi : panel));
-        g.fillRoundedRectangle(r, 5);
+        const bool live = input.channel < bar.state.channelNames.size();
+        auto r = getLocalBounds();
+        if (focused || isMouseOver()) {
+            g.setColour(well);
+            g.fillRect(r);
+        }
         if (focused) {
             g.setColour(input.colour);
-            g.drawRoundedRectangle(r, 5, 1.5f);
+            g.fillRect(r.removeFromBottom(2));
         }
-        auto inner = r.reduced(10, 0);
-        g.setColour(input.muted ? dim : input.colour);
-        g.fillEllipse(inner.removeFromLeft(10).withSizeKeepingCentre(10, 10));
+        g.setColour(line);
+        g.drawVerticalLine(getWidth() - 1, 0, float(getHeight()));
+
+        auto inner = getLocalBounds().reduced(10, 0);
+        swatch(g, inner.removeFromLeft(10).withSizeKeepingCentre(10, 10), input.muted ? dim : input.colour);
         inner.removeFromLeft(6);
-        const bool live = input.channel < bar.state.channelNames.size();
-        g.setColour(input.muted || !live ? dim : text);
-        g.setFont(sans(13, true));
-        g.drawText(label(), inner, juce::Justification::centredLeft);
+        g.setColour(input.muted || !live ? dim : (focused ? text : text.withAlpha(0.8f)));
+        g.setFont(mono(11));
+        const auto l = label();
+        g.drawText(l, inner.removeFromLeft(juce::roundToInt(juce::GlyphArrangement::getStringWidth(mono(11), l)) + 2), juce::Justification::centredLeft, false);
+        for (auto& t : tags()) {
+            inner.removeFromLeft(4);
+            const int w = juce::roundToInt(juce::GlyphArrangement::getStringWidth(mono(9.5f), t)) + 6;
+            const auto tag = inner.removeFromLeft(w).withSizeKeepingCentre(w, 14);
+            const auto c = t.startsWith("NO CH") ? red : (t == "SPL" ? amber : accent);
+            g.setColour(c);
+            g.drawRect(tag);
+            g.setFont(mono(9.5f));
+            g.drawText(t, tag, juce::Justification::centred);
+        }
     }
 
     void mouseDown(const juce::MouseEvent& e) override
@@ -48,15 +64,17 @@ public:
     }
 
 private:
-    juce::String label() const
+    juce::String label() const { return juce::String(number) + " " + input.name.toUpperCase(); }
+
+    juce::StringArray tags() const
     {
-        juce::String s = juce::String(number) + "  " + input.name;
-        if (input.splMic) s += "  SPL";
+        juce::StringArray t;
+        if (input.splMic) t.add("SPL");
         const auto& l = bar.state.inputs;
-        if (l.deltaA == input.id) s += "  A";
-        if (l.deltaB == input.id) s += "  B";
-        if (input.channel >= bar.state.channelNames.size()) s += "  (no ch " + juce::String(input.channel + 1) + ")";
-        return s;
+        if (l.deltaA == input.id) t.add("A");
+        if (l.deltaB == input.id) t.add("B");
+        if (input.channel >= bar.state.channelNames.size()) t.add("NO CH " + juce::String(input.channel + 1));
+        return t;
     }
 
     InputBar& bar;
@@ -68,37 +86,30 @@ InputBar::~InputBar() = default;
 
 InputBar::InputBar()
 {
-    auto style = [this](juce::Button& b, const juce::String& tip) {
-        b.setColour(juce::TextButton::buttonColourId, panel);
-        b.setColour(juce::TextButton::buttonOnColourId, panelHi.brighter(0.25f));
-        b.setColour(juce::TextButton::textColourOffId, dim);
-        b.setColour(juce::TextButton::textColourOnId, text);
+    auto setup = [this](juce::Button& b, const juce::String& tip) {
         b.setTooltip(tip);
         addAndMakeVisible(b);
     };
-    style(add, "Add an input (up to 16)");
+    setup(add, "Add an input (up to 16)");
     add.onClick = [this] { change([this](InputList& l) { if (int id = l.add(state.channelNames.size()); id > 0) l.focusedId = id; }); };
 
-    style(fast, utf8("Fast averaging (≈125 ms) · A cycles"));
-    style(slow, utf8("Slow averaging (1 s) · A cycles"));
-    style(inf, utf8("Infinite averaging since reset (R) · A cycles"));
-    fast.setConnectedEdges(juce::Button::ConnectedOnRight);
-    slow.setConnectedEdges(juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);
-    inf.setConnectedEdges(juce::Button::ConnectedOnLeft);
+    setup(fast, utf8("Fast averaging (≈125 ms). A cycles"));
+    setup(slow, "Slow averaging (1 s). A cycles");
+    setup(inf, "Infinite averaging since reset (R). A cycles");
     fast.onClick = [this] { if (onAveraging) onAveraging(Averaging::Fast); };
     slow.onClick = [this] { if (onAveraging) onAveraging(Averaging::Slow); };
     inf.onClick = [this] { if (onAveraging) onAveraging(Averaging::Infinite); };
 
-    for (int r : MtwSpectrum::kResolutions) resolution.addItem("1/" + juce::String(r) + " oct", r);
-    resolution.setTooltip("RTA band resolution");
+    for (int r : MtwSpectrum::kResolutions) resolution.addItem("1/" + juce::String(r), r);
+    resolution.setTooltip("RTA band resolution (octave)");
     resolution.onChange = [this] { if (onResolution) onResolution(resolution.getSelectedId()); };
     addAndMakeVisible(resolution);
 
-    style(bars, "RTA bars for the focused input (B)");
-    style(delta, utf8("A − B delta trace (D)"));
-    style(freeze, "Freeze the display (Space)");
-    style(capture, utf8("Capture the focused trace as a reference (C) · right-click: clear (X)"));
-    style(settings, utf8("Audio device, calibration, limits (⌘,)"));
+    setup(bars, "RTA bars for the focused input (B)");
+    setup(delta, utf8("A − B delta trace (D)"));
+    setup(freeze, "Freeze the display (Space)");
+    setup(capture, "Capture the focused trace as a reference (C). Right-click: clear (X)");
+    setup(settings, utf8("Inputs & routing, audio, calibration, limits (⌘,)"));
     bars.onClick = [this] { if (onBars) onBars(); };
     delta.onClick = [this] { if (onDelta) onDelta(); };
     freeze.onClick = [this] { if (onFreeze) onFreeze(); };
@@ -107,6 +118,7 @@ InputBar::InputBar()
         else if (onCapture) onCapture();
     };
     settings.onClick = [this] { if (onSettings) onSettings(); };
+    freeze.setColour(juce::TextButton::buttonOnColourId, amber);
 }
 
 void InputBar::setState(const State& s)
@@ -120,8 +132,7 @@ void InputBar::setState(const State& s)
     bars.setToggleState(s.bars, juce::dontSendNotification);
     delta.setToggleState(s.delta, juce::dontSendNotification);
     freeze.setToggleState(s.frozen, juce::dontSendNotification);
-    freeze.setColour(juce::TextButton::buttonOnColourId, amber.withAlpha(0.6f));
-    capture.setButtonText(s.captures > 0 ? "Capture (" + juce::String(s.captures) + ")" : "Capture");
+    capture.setButtonText(s.captures > 0 ? "Cap " + juce::String(s.captures) : "Cap");
     add.setEnabled(int(s.inputs.inputs.size()) < InputList::kMax);
     if (chipsChanged) rebuildChips();
 }
@@ -140,34 +151,39 @@ void InputBar::rebuildChips()
 
 void InputBar::paint(juce::Graphics& g)
 {
-    g.fillAll(bg);
-    g.setColour(gridStrong);
+    g.fillAll(panel);
+    g.setColour(line);
     g.drawHorizontalLine(getHeight() - 1, 0, float(getWidth()));
+    if (!chips.empty()) g.drawVerticalLine(0, 0, float(getHeight()));
+    caption(g, "AVG", { fast.getX() - 34, 0, 30, getHeight() }, juce::Justification::centredRight);
+    caption(g, "RTA", { resolution.getX() - 34, 0, 30, getHeight() }, juce::Justification::centredRight);
 }
 
 void InputBar::resized()
 {
-    auto r = getLocalBounds().reduced(8, 0);
-    auto right = r.removeFromRight(572);
-    auto place = [&](juce::Component& c, int w) { c.setBounds(right.removeFromLeft(w).reduced(2, 8)); };
-    place(fast, 50);
-    place(slow, 50);
-    place(inf, 44);
-    right.removeFromLeft(8);
-    place(resolution, 92);
-    right.removeFromLeft(8);
-    place(bars, 50);
-    place(delta, 54);
-    place(freeze, 60);
-    place(capture, 88);
-    place(settings, 76);
+    auto r = getLocalBounds().withTrimmedBottom(1);
+    auto right = r.removeFromRight(590).reduced(6, 5);
+    auto place = [&](juce::Component& c, int w, int gapAfter = 0) {
+        c.setBounds(right.removeFromLeft(w));
+        right.removeFromLeft(gapAfter);
+    };
+    right.removeFromLeft(34);
+    place(fast, 44, -1); // shared borders: a segmented control
+    place(slow, 44, -1);
+    place(inf, 40, 44);
+    place(resolution, 60, 10);
+    place(bars, 46, 4);
+    place(delta, 52, 4);
+    place(freeze, 56, 4);
+    place(capture, 52, 4);
+    place(settings, 60);
+    settings.setButtonText("Setup");
 
     for (auto& c : chips) {
         const int w = std::min(c->preferredWidth(), std::max(60, r.getWidth() - 40));
         c->setBounds(r.removeFromLeft(w));
-        r.removeFromLeft(4);
     }
-    add.setBounds(r.removeFromLeft(36).reduced(2, 8));
+    add.setBounds(r.removeFromLeft(34).reduced(5, 5));
 }
 
 void InputBar::change(const std::function<void(InputList&)>& edit)

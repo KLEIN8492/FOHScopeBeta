@@ -70,15 +70,15 @@ public:
     void paint(juce::Graphics& g) override
     {
         g.fillAll(panel);
-        g.setFont(sans(12, true));
+        g.setFont(mono(10, true));
         for (auto& [y, title] : headings) {
             g.setColour(dim);
             g.drawText(title, 16, y, getWidth() - 32, 20, juce::Justification::centredLeft);
-            g.setColour(gridStrong);
+            g.setColour(line);
             g.drawHorizontalLine(y + 21, 16, float(getWidth() - 16));
         }
-        g.setFont(sans(13));
-        g.setColour(text);
+        g.setFont(mono(11));
+        g.setColour(dim);
         for (auto& [y, label] : labels) g.drawText(label, 16, y, 170, 26, juce::Justification::centredLeft);
     }
 

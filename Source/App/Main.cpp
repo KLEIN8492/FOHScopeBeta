@@ -56,10 +56,15 @@ public:
 
     void initialise(const juce::String&) override
     {
+        juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
         commands.registerAllCommandsForTarget(this);
         window = std::make_unique<MainWindow>(commands);
     }
-    void shutdown() override { window = nullptr; }
+    void shutdown() override
+    {
+        window = nullptr;
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+    }
     void systemRequestedQuit() override { quit(); }
 
     void getAllCommands(juce::Array<juce::CommandID>& ids) override
@@ -90,6 +95,7 @@ public:
     }
 
 private:
+    fs::theme::LookAndFeel lookAndFeel; // declared first: outlives every component
     juce::ApplicationCommandManager commands;
     std::unique_ptr<MainWindow> window;
 };
