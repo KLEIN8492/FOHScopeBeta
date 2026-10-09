@@ -65,7 +65,6 @@ void SidePanel::paintSpl(juce::Graphics& g, juce::Rectangle<int> r)
     };
     const int w15 = SplMeter::kWindows - 1, w1 = 2; // 15 min, 1 min sliding Leq
     big("LA Fast  dB SPL", s.fast[1] + off, 0);
-    big("LCeq 15 min", s.leqWindow[size_t(w15)][2] + off, spl.limitLCeq15);
 
     // limit > 0: VenueTuner limit colours on the value (amber within 3 dB, white on red over).
     auto small = [&](const juce::String& name, double v, double limit = 0) {
@@ -84,6 +83,8 @@ void SidePanel::paintSpl(juce::Graphics& g, juce::Rectangle<int> r)
     };
     r.removeFromTop(4);
     small("LAeq 15 MIN", s.leqWindow[size_t(w15)][1] + off, spl.limitLAeq15);
+    small("LCeq 15 MIN", s.leqWindow[size_t(w15)][2] + off, spl.limitLCeq15);
+    r.removeFromTop(6);
     small("LC FAST", s.fast[2] + off);
     small("LAeq 1 MIN", s.leqWindow[size_t(w1)][1] + off);
     small("LCpeak MAX", s.cPeak + off);
