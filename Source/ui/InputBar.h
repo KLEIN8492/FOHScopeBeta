@@ -18,14 +18,14 @@ public:
         std::vector<DeviceHub::Info> interfaces; // catalogue + states
         Averaging averaging = Averaging::Slow;
         int bandsPerOctave = 3;
-        bool bars = true, delta = false, frozen = false;
+        bool bars = true, delta = false, frozen = false, autoScale = false;
         int captures = 0;
     };
 
     std::function<void(const InputList&)> onInputs;
     std::function<void(Averaging)> onAveraging;
     std::function<void(int)> onResolution;
-    std::function<void()> onBars, onDelta, onFreeze, onCapture, onClearCaptures, onSettings, onAdd;
+    std::function<void()> onBars, onDelta, onFreeze, onCapture, onClearCaptures, onSettings, onAdd, onAutoScale;
 
     InputBar();
     ~InputBar() override;
@@ -47,6 +47,7 @@ private:
     juce::TextButton add { "+" };
     juce::TextButton fast { "FAST" }, slow { "SLOW" }, inf { "INF" };
     juce::ComboBox resolution;
+    juce::TextButton autoScale { "Auto" };
     juce::TextButton bars { "Bars" }, delta { "Delta" }, freeze { "Freeze" }, capture { "Capture" }, settings { "Settings" };
 };
 

@@ -51,4 +51,6 @@ stuck (`sudo killall coreaudiod` fixes it).
 | B / D | RTA bars / delta strip |
 | R | reset Inf averaging, peak hold, Leq-since-reset |
 | F | full screen |
+| Z | fit the dB scale to the material (AUTO in the bar keeps following) |
+| wheel / cmd+wheel / pinch | pan / zoom the dB scale (or drag the dB labels; double-click them to fit) |
 | CMD+, | setup |

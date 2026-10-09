@@ -106,6 +106,8 @@ InputBar::InputBar()
     resolution.onChange = [this] { if (onResolution) onResolution(resolution.getSelectedId()); };
     addAndMakeVisible(resolution);
 
+    setup(autoScale, "dB scale follows the material (Z: fit once). Wheel: pan, cmd+wheel / pinch: zoom, drag the dB labels: pan");
+    autoScale.onClick = [this] { if (onAutoScale) onAutoScale(); };
     setup(bars, "RTA bars for the focused input (B)");
     setup(delta, utf8("A − B delta trace (D)"));
     setup(freeze, "Freeze the display (Space)");
@@ -136,6 +138,7 @@ void InputBar::setState(const State& s)
     inf.setToggleState(s.averaging == Averaging::Infinite, juce::dontSendNotification);
     resolution.setSelectedId(s.bandsPerOctave, juce::dontSendNotification);
     bars.setToggleState(s.bars, juce::dontSendNotification);
+    autoScale.setToggleState(s.autoScale, juce::dontSendNotification);
     delta.setToggleState(s.delta, juce::dontSendNotification);
     freeze.setToggleState(s.frozen, juce::dontSendNotification);
     capture.setButtonText(s.captures > 0 ? "Cap " + juce::String(s.captures) : "Cap");
@@ -168,7 +171,7 @@ void InputBar::paint(juce::Graphics& g)
 void InputBar::resized()
 {
     auto r = getLocalBounds().withTrimmedBottom(1);
-    auto right = r.removeFromRight(590).reduced(6, 5);
+    auto right = r.removeFromRight(646).reduced(6, 5);
     auto place = [&](juce::Component& c, int w, int gapAfter = 0) {
         c.setBounds(right.removeFromLeft(w));
         right.removeFromLeft(gapAfter);
@@ -177,7 +180,8 @@ void InputBar::resized()
     place(fast, 44, -1); // shared borders: a segmented control
     place(slow, 44, -1);
     place(inf, 40, 44);
-    place(resolution, 60, 10);
+    place(resolution, 60, 4);
+    place(autoScale, 50, 10);
     place(bars, 46, 4);
     place(delta, 52, 4);
     place(freeze, 56, 4);

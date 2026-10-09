@@ -30,6 +30,17 @@ MainComponent::MainComponent()
     bar.onCapture = [this] { capture(); };
     bar.onClearCaptures = [this] { captures.clear(); updateBar(); spectrum.repaint(); };
     bar.onSettings = [this] { showSettings(); };
+    bar.onAutoScale = [this] {
+        autoScale = !autoScale;
+        if (autoScale) fitScale();
+        updateBar();
+    };
+    // A manual gesture takes the scale back from AUTO.
+    spectrum.onScale = [this](DbScale s) {
+        if (autoScale) { autoScale = false; updateBar(); }
+        setScale(s);
+    };
+    spectrum.onFit = [this] { fitScale(); };
     bar.onAdd = [this] {
         showSettings();
         settingsWindow->addInput();
@@ -106,6 +117,7 @@ void MainComponent::updateBar()
     st.bars = settings.showBars;
     st.delta = settings.showDelta;
     st.frozen = frozen;
+    st.autoScale = autoScale;
     st.captures = int(captures.size());
     bar.setState(st);
     if (const auto* f = settings.inputs.find(settings.inputs.focusedId)) spectrograph.setLabel(f->name, f->colour);
@@ -117,6 +129,16 @@ void MainComponent::timerCallback()
     const bool fresh = f.seq != lastSeq;
     lastSeq = f.seq;
     if (fresh) logLevels(f); // logging never stops, even when the display is frozen
+    if (fresh && autoScale && !frozen)
+        if (const auto loud = loudestDb(f)) {
+            const auto next = DbScale { settings.displayTop, settings.displayRange }.followed(*loud);
+            if (next.top != settings.displayTop) setScale(next);
+        }
+    if (scaleDirtyMs != 0 && now() - scaleDirtyMs > 1000) { // save once the gesture settles
+        scaleDirtyMs = 0;
+        settings.save();
+        if (settingsWindow) settingsWindow->refresh();
+    }
 
     bool added = false;
     while (analyser.popSpectrogramColumn(column.data()))
@@ -131,6 +153,34 @@ void MainComponent::timerCallback()
     // Sound level meters display at 10 Hz (readable digits); the analyser publishes at 30.
     showFrame(f, ++sideDivider >= 3);
     if (sideDivider >= 3) sideDivider = 0;
+}
+
+juce::uint32 MainComponent::now() { return juce::Time::getMillisecondCounter(); }
+
+void MainComponent::setScale(DbScale s)
+{
+    s = s.clamped();
+    settings.displayTop = s.top;
+    settings.displayRange = s.range;
+    spectrum.setScale(s);
+    scaleDirtyMs = std::max<juce::uint32>(1, now());
+}
+
+// Loudest displayed level (dBFS) of the shown traces, if any has data.
+std::optional<float> MainComponent::loudestDb(const Frame& f) const
+{
+    std::optional<float> loud;
+    for (const auto& t : f.traces)
+        if (t.hasData)
+            for (float v : t.line)
+                if (v > -190.0f) loud = std::max(loud.value_or(-200.0f), v + theme::kAes17);
+    return loud;
+}
+
+void MainComponent::fitScale()
+{
+    if (const auto loud = loudestDb(analyser.latest()))
+        setScale(DbScale { settings.displayTop, settings.displayRange }.fittedTo(*loud));
 }
 
 void MainComponent::showFrame(const Frame& f, bool withSidePanel)
@@ -211,6 +261,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& k)
     if (c == 'd') { s.showDelta = !s.showDelta; apply(s); return true; }
     if (c == 'r') { analyser.resetAveraging(); spectrograph.clear(); return true; }
     if (c == 'f') { toggleFullScreen(); return true; }
+    if (c == 'z') { fitScale(); return true; }
     if (c == 'a') {
         s.averaging = s.averaging == Averaging::Fast ? Averaging::Slow : s.averaging == Averaging::Slow ? Averaging::Infinite : Averaging::Fast;
         apply(s);

@@ -33,6 +33,10 @@ private:
     void capture();
     void updateBar();
     void showFrame(const Frame&, bool withSidePanel);
+    void setScale(DbScale);
+    void fitScale();
+    std::optional<float> loudestDb(const Frame&) const;
+    static juce::uint32 now();
 
     Analyser analyser;
     DeviceHub hub { analyser }; // after the analyser: closes every interface before it goes
@@ -52,6 +56,8 @@ private:
 
     std::vector<SpectrumView::Capture> captures;
     bool frozen = false;
+    bool autoScale = false;      // dB scale follows the material; always off at launch
+    juce::uint32 scaleDirtyMs = 0;
     uint64_t lastSeq = 0;
     juce::uint32 lastLogMs = 0;
     bool deviceLost = false;

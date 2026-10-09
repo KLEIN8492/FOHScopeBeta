@@ -233,9 +233,19 @@ void SpectrumView::paintCursor(juce::Graphics& g, float x, bool pinned)
     }
 }
 
+void SpectrumView::setScale(DbScale s)
+{
+    view.top = s.top;
+    view.range = s.range;
+    repaint();
+}
+
+float SpectrumView::dbAt(float py) const { return view.top - (py - plot.getY()) / plot.getHeight() * view.range; }
+
 void SpectrumView::mouseMove(const juce::MouseEvent& e)
 {
     hoverX = e.position.x;
+    setMouseCursor(onAxis(e.position) ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
     repaint();
 }
 
@@ -247,10 +257,41 @@ void SpectrumView::mouseExit(const juce::MouseEvent&)
 
 void SpectrumView::mouseDown(const juce::MouseEvent& e)
 {
+    dragStart.reset();
+    if (onAxis(e.position)) { dragStart = scale(); return; }
     if (!plot.contains(e.position)) return;
     // Click pins a cursor; clicking near the pinned one removes it.
     pinnedHz = pinnedHz > 0 && std::abs(axis.x(pinnedHz) - e.position.x) < 6 ? -1.0f : float(axis.hz(e.position.x));
     repaint();
+}
+
+// Dragging the labels down pulls the scale down with the mouse (the levels follow the hand).
+void SpectrumView::mouseDrag(const juce::MouseEvent& e)
+{
+    if (!dragStart || !onScale) return;
+    const float db = float(e.getDistanceFromDragStartY()) / plot.getHeight() * dragStart->range;
+    onScale(dragStart->panned(db));
+}
+
+void SpectrumView::mouseDoubleClick(const juce::MouseEvent& e)
+{
+    if (onAxis(e.position) && onFit) onFit();
+}
+
+void SpectrumView::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& w)
+{
+    if (!onScale || !getLocalBounds().toFloat().contains(e.position)) return;
+    if (e.mods.isCommandDown()) {
+        onScale(scale().zoomed(std::exp(-w.deltaY * 1.5f), dbAt(e.position.y)));
+    } else {
+        // ≈ 2 dB per wheel notch; trackpads scroll smoothly. Scroll up shows louder levels.
+        onScale(scale().panned(w.deltaY * 20.0f));
+    }
+}
+
+void SpectrumView::mouseMagnify(const juce::MouseEvent& e, float factor)
+{
+    if (onScale && factor > 0) onScale(scale().zoomed(1.0f / factor, dbAt(e.position.y)));
 }
 
 } // namespace fs
