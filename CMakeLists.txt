@@ -62,3 +62,8 @@ file(GLOB FS_TEST_SOURCES CONFIGURE_DEPENDS Tests/*.cpp)
 add_executable(FOHScopeTests ${FS_TEST_SOURCES})
 target_include_directories(FOHScopeTests PRIVATE Tests)
 target_link_libraries(FOHScopeTests PRIVATE fs_core Catch2::Catch2WithMain)
+
+# ---- test signal source (plays into BlackHole for testing without hardware) ----
+add_executable(FOHScopeSignalGen Tools/SignalGen.cpp)
+target_include_directories(FOHScopeSignalGen PRIVATE Tests)
+target_link_libraries(FOHScopeSignalGen PRIVATE fs_core)

@@ -80,10 +80,15 @@ MtwSpectrum::Integral MtwSpectrum::integrate(double lo, double hi, double fc) co
 void MtwSpectrum::process(const float* x, int n)
 {
     for (auto& w : windows) {
-        for (int i = 0; i < n; ++i) {
-            w.ring[w.writePos] = x[i];
-            w.writePos = (w.writePos + 1) & size_t(w.N - 1);
-            if (++w.sinceFrame >= size_t(w.hop)) {
+        // Copy in chunks that stop at the ring's end and at the next frame boundary.
+        for (int i = 0; i < n;) {
+            const size_t room = std::min(size_t(w.N) - w.writePos, size_t(w.hop) - w.sinceFrame);
+            const size_t chunk = std::min(room, size_t(n - i));
+            std::copy(x + i, x + i + long(chunk), w.ring.begin() + long(w.writePos));
+            w.writePos = (w.writePos + chunk) & size_t(w.N - 1);
+            w.sinceFrame += chunk;
+            i += int(chunk);
+            if (w.sinceFrame >= size_t(w.hop)) {
                 w.sinceFrame = 0;
                 w.frame();
             }

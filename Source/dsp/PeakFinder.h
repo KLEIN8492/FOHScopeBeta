@@ -46,7 +46,7 @@ private:
     Params params;
     std::vector<Track> tracks;
     std::vector<Peak> reported;
-    std::vector<float> baseline, scratch;
+    std::vector<float> scratch;
 };
 
 } // namespace fs

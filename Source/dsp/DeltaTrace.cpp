@@ -8,8 +8,8 @@ void DeltaTrace::prepare(double sampleRate)
 {
     sr = sampleRate;
     maxLag = int(kMaxDelaySec * sr);
-    // Correlation block ≥ 4 × the longest lag so a late arrival still overlaps most of it.
-    block = int(juce::nextPowerOfTwo(4 * maxLag));
+    // Correlation block ≥ 2 × the longest lag so even the latest arrival overlaps half of it.
+    block = int(juce::nextPowerOfTwo(2 * maxLag));
     corrOrder = int(std::log2(block)) + 1; // zero-padded to 2 × block: linear, not circular
     corrFft = std::make_unique<juce::dsp::FFT>(corrOrder);
     const size_t ringSize = size_t(juce::nextPowerOfTwo(block + maxLag + 1));

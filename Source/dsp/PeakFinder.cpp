@@ -21,21 +21,22 @@ bool PeakFinder::shouldReport(const Track& t, double nowSec, const Params& p)
 void PeakFinder::update(const float* line, double now)
 {
     constexpr int n = grid::kPoints;
-    baseline.resize(n);
-    for (int i = 0; i < n; ++i) {
+    // Median of the ±½ octave around i. Only evaluated for points that already passed the cheap
+    // local-maximum and narrowness tests, so it runs a handful of times per update, not 480.
+    auto baselineAt = [&](int i) {
         const int a = std::max(0, i - kBaselineHalf), b = std::min(n - 1, i + kBaselineHalf);
         scratch.assign(line + a, line + b + 1);
         auto mid = scratch.begin() + long(scratch.size() / 2);
         std::nth_element(scratch.begin(), mid, scratch.end());
-        baseline[size_t(i)] = *mid;
-    }
+        return *mid;
+    };
 
     for (int i = std::max(kFirstIndex, kNarrowHalf); i < n - kNarrowHalf; ++i) {
         const float v = line[i];
         if (!(v >= line[i - 1] && v > line[i + 1])) continue;
-        const float prominence = v - baseline[size_t(i)];
-        if (prominence < params.thresholdDb) continue;
         if (v - line[i - kNarrowHalf] < 3.0f || v - line[i + kNarrowHalf] < 3.0f) continue;
+        const float prominence = v - baselineAt(i);
+        if (prominence < params.thresholdDb) continue;
 
         // Parabolic interpolation of the maximum between grid points.
         const double den = line[i - 1] - 2.0 * v + line[i + 1];
