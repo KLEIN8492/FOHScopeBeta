@@ -120,3 +120,20 @@ TEST_CASE("Analyser: delta between two inputs")
     REQUIRE(f.deltaValid);
     CHECK_THAT(f.deltaMs, WithinAbs(20.0, 0.1));
 }
+
+TEST_CASE("Analyser: per-channel peak meters for routing, held until read")
+{
+    fs::Analyser a;
+    a.prepareForTest(48000, 3);
+    std::vector<float> loud(256, 0.0f), quiet(256, 0.0f), silent(256, 0.0f);
+    loud[10] = -0.5f;
+    quiet[20] = 0.01f;
+    const float* ch[3] = { loud.data(), quiet.data(), silent.data() };
+    a.pushTestBlock(ch, 3, 256);
+    CHECK(a.numDeviceChannels() == 3);
+    CHECK_THAT(a.takeChannelPeak(0), WithinAbs(0.5, 1e-6));
+    CHECK_THAT(a.takeChannelPeak(1), WithinAbs(0.01, 1e-6));
+    CHECK(a.takeChannelPeak(2) == 0.0f);
+    CHECK(a.takeChannelPeak(0) == 0.0f); // reading resets the hold
+    CHECK(a.takeChannelPeak(7) == 0.0f); // out of range is silent, not a crash
+}

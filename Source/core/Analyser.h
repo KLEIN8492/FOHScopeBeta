@@ -36,6 +36,10 @@ public:
     void resetAveraging() { resetRequested.store(true); }
     const Frame& latest() { return frames.read(); }
     bool popSpectrogramColumn(float* out); // grid::kPoints values, dB re FS RMS (Fast)
+    // Routing meters: every device input channel, analysed or not. Linear peak since the last
+    // call (the hold resets on read). Message thread, like the device open/close it follows.
+    int numDeviceChannels() const { return meterCount.load(); }
+    float takeChannelPeak(int deviceChannel);
 
     // ---- audio device ----
     void audioDeviceAboutToStart(juce::AudioIODevice*) override;
@@ -74,6 +78,8 @@ private:
     std::vector<std::unique_ptr<SpscFifo<float>>> fifos; // per device input channel
     std::vector<int> activeToDevice;
     std::atomic<bool> deviceActive { false };
+    std::unique_ptr<std::atomic<float>[]> meters; // per device channel, written by the callback
+    std::atomic<int> meterCount { 0 };
     std::atomic<uint64_t> deviceGeneration { 0 };
     double sampleRate = 0;
     int deviceChannels = 0;

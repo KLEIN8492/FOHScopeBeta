@@ -49,6 +49,12 @@ void Analyser::setSplOffset(double dB)
     ++controlVersion;
 }
 
+float Analyser::takeChannelPeak(int ch)
+{
+    if (ch < 0 || ch >= meterCount.load()) return 0.0f;
+    return meters[size_t(ch)].exchange(0.0f, std::memory_order_relaxed);
+}
+
 bool Analyser::popSpectrogramColumn(float* out)
 {
     if (columns.available() < size_t(grid::kPoints)) return false;
@@ -78,6 +84,10 @@ void Analyser::prepareDevice(double sr, int numChannels, std::vector<int> map)
     activeToDevice = std::move(map);
     fifos.clear();
     for (int ch = 0; ch < numChannels; ++ch) fifos.push_back(std::make_unique<SpscFifo<float>>(kFifoSize));
+    meterCount.store(0);
+    meters = std::make_unique<std::atomic<float>[]>(size_t(numChannels));
+    for (int ch = 0; ch < numChannels; ++ch) meters[size_t(ch)].store(0.0f);
+    meterCount.store(numChannels);
     deviceGeneration.fetch_add(1);
     deviceActive.store(true);
 }
@@ -90,7 +100,12 @@ void Analyser::audioDeviceIOCallbackWithContext(const float* const* in, int numI
     if (!deviceActive.load(std::memory_order_acquire)) return;
     for (int c = 0; c < numIn && c < int(activeToDevice.size()); ++c) {
         const int ch = activeToDevice[size_t(c)];
-        if (in[c] != nullptr && ch < int(fifos.size())) fifos[size_t(ch)]->push(in[c], size_t(n)); // full → drop
+        if (in[c] == nullptr || ch >= int(fifos.size())) continue;
+        fifos[size_t(ch)]->push(in[c], size_t(n)); // full → drop
+        const auto range = juce::FloatVectorOperations::findMinAndMax(in[c], n);
+        const float peak = std::max(-range.getStart(), range.getEnd());
+        auto& m = meters[size_t(ch)];
+        if (peak > m.load(std::memory_order_relaxed)) m.store(peak, std::memory_order_relaxed);
     }
 }
 

@@ -26,10 +26,13 @@ stuck (`sudo killall coreaudiod` fixes it).
 
 ## Using it
 
-- **Inputs**: `+` adds one (next free channel, new colour). Click a chip to focus it (RTA bars,
-  peak hold, spectrograph). Right-click: rename, channel, colour, hide, use as SPL mic,
-  delta A / B, remove.
-- **Settings (⌘,)**: Audio device · Delta A/B · SPL calibration (94/114 dB calibrator, or
+- **Routing (⌘, → Inputs & Routing)**: patch matrix. Rows = the device's input channels with live
+  meters (find the mic before patching), columns = FOHScope inputs. Click a cell to patch; click a
+  column's name to rename, its dot for colour; SPL / Shown / × pills; `+ Add input`. Delta A/B
+  pickers under the matrix.
+- **Inputs bar**: click a chip to focus it (RTA bars, peak hold, spectrograph); right-click for
+  quick changes during a show.
+- **Settings (⌘, from anywhere)**: Inputs & Routing · Audio device · SPL calibration (94/114 dB calibrator, or
   "room reads now" reference, or an offset) · LAeq/LCeq 15 min limits · feedback threshold/hold ·
   spectrograph history and colour range · spectrum scale.
 - Levels in the spectrum are dBFS (AES17: full-scale sine = 0 dBFS). SPL is in the right panel,

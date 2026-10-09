@@ -9,9 +9,7 @@ class SettingsWindow::Measurement : public juce::Component
 public:
     explicit Measurement(Hooks h) : hooks(std::move(h))
     {
-        for (auto* c : { &deltaA, &deltaB, &history }) addAndMakeVisible(*c);
-        deltaA.onChange = [this] { edit([this](Settings& s) { s.inputs.deltaA = deltaA.getSelectedId() > 1 ? deltaA.getSelectedId() - 1 : -1; }); };
-        deltaB.onChange = [this] { edit([this](Settings& s) { s.inputs.deltaB = deltaB.getSelectedId() > 1 ? deltaB.getSelectedId() - 1 : -1; }); };
+        addAndMakeVisible(history);
         history.addItem("10 s", 10);
         history.addItem("30 s", 30);
         history.addItem("60 s", 60);
@@ -51,7 +49,6 @@ public:
     void refresh()
     {
         const auto& s = hooks.get();
-        rebuildDeltaBoxes(s);
         history.setSelectedId(s.spectrogramSeconds, juce::dontSendNotification);
         offset.setValue(s.splOffset, juce::dontSendNotification);
         laeq.setValue(s.limitLAeq15, juce::dontSendNotification);
@@ -96,9 +93,6 @@ public:
             c.setBounds(190, y, w > 0 ? w : getWidth() - 206, 26);
             y += 32;
         };
-        heading(utf8("DELTA TRACE (A − B, B delayed to line up with A)"));
-        row("A (FOH mic)", deltaA, 220);
-        row("B (console / reference)", deltaB, 220);
         heading("SPL CALIBRATION");
         calStatus.setBounds(16, y, getWidth() - 32, 22);
         y += 26;
@@ -141,18 +135,6 @@ private:
         addAndMakeVisible(s);
     }
 
-    // Combo ids: 1 = off, input id + 1 otherwise (ComboBox ids must be non-zero).
-    void rebuildDeltaBoxes(const Settings& s)
-    {
-        for (auto* box : { &deltaA, &deltaB }) {
-            box->clear(juce::dontSendNotification);
-            box->addItem("Off", 1);
-            for (const auto& in : s.inputs.inputs) box->addItem(in.name, in.id + 1);
-        }
-        deltaA.setSelectedId(s.inputs.deltaA > 0 ? s.inputs.deltaA + 1 : 1, juce::dontSendNotification);
-        deltaB.setSelectedId(s.inputs.deltaB > 0 ? s.inputs.deltaB + 1 : 1, juce::dontSendNotification);
-    }
-
     void edit(const std::function<void(Settings&)>& f)
     {
         auto s = hooks.get();
@@ -173,7 +155,7 @@ private:
     }
 
     Hooks hooks;
-    juce::ComboBox deltaA, deltaB, history;
+    juce::ComboBox history;
     juce::Slider offset, laeq, lceq, threshold, hold, floorDb, topDb, displayTop, displayRange;
     juce::TextButton cal94 { "94 dB" }, cal114 { "114 dB" }, refSet { "Set" }, openLogs { "Open log folder" };
     juce::Slider refLevel;
@@ -185,6 +167,9 @@ SettingsWindow::SettingsWindow(juce::AudioDeviceManager& dm, Hooks h) : juce::Do
 {
     auto* tabs = new juce::TabbedComponent(juce::TabbedButtonBar::TabsAtTop);
     tabs->setTabBarDepth(32);
+    routing = std::make_unique<RoutingPage>(RoutingPage::Hooks { h.get, h.set, h.channelNames, h.takePeak });
+    tabs->addTab(utf8("Inputs & Routing"), panel, routing.get(), false);
+
     auto* audio = new juce::AudioDeviceSelectorComponent(dm, 1, 256, 0, 0, false, false, false, false);
     audio->setSize(560, 520);
     tabs->addTab("Audio", panel, audio, true);
@@ -199,12 +184,16 @@ SettingsWindow::SettingsWindow(juce::AudioDeviceManager& dm, Hooks h) : juce::Do
     setContentOwned(tabs, false);
     setResizable(true, false);
     setUsingNativeTitleBar(true);
-    centreWithSize(600, 640);
+    centreWithSize(820, 680);
     measurement->setSize(580, 100);
 }
 
 SettingsWindow::~SettingsWindow() { clearContentComponent(); }
 
-void SettingsWindow::refresh() { measurement->refresh(); }
+void SettingsWindow::refresh()
+{
+    routing->refresh();
+    measurement->refresh();
+}
 
 } // namespace fs

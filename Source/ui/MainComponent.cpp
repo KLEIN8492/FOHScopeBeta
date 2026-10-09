@@ -80,6 +80,7 @@ void MainComponent::changeListenerCallback(juce::ChangeBroadcaster*)
             settings.save();
         }
     updateBar();
+    if (settingsWindow) settingsWindow->refresh(); // the routing rows follow the device's channels
     repaint();
 }
 
@@ -194,6 +195,8 @@ void MainComponent::showSettings()
             if (!f.splValid) return std::nullopt;
             return f.spl.slow[size_t(juce::jlimit(0, 2, weighting))];
         };
+        h.channelNames = [this] { return channelNames(); };
+        h.takePeak = [this](int ch) { return analyser.takeChannelPeak(ch); };
         settingsWindow = std::make_unique<SettingsWindow>(devices, std::move(h));
     }
     settingsWindow->refresh();
@@ -209,10 +212,7 @@ void MainComponent::toggleFullScreen()
 bool MainComponent::keyPressed(const juce::KeyPress& k)
 {
     const auto c = juce::CharacterFunctions::toLowerCase(k.getTextCharacter());
-    if (k.getModifiers().isCommandDown()) {
-        if (k.getKeyCode() == ',') { showSettings(); return true; }
-        return false;
-    }
+    if (k.getModifiers().isCommandDown()) return false; // ⌘ shortcuts are menu commands (Main.cpp)
     auto s = settings;
     if (k == juce::KeyPress::spaceKey) { frozen = !frozen; updateBar(); spectrum.repaint(); return true; }
     if (c == 'c') { capture(); return true; }
