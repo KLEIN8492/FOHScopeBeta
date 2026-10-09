@@ -43,14 +43,17 @@ void SidePanel::paintSpl(juce::Graphics& g, juce::Rectangle<int> r)
     const double off = frame.splOffset;
     const auto& s = frame.spl;
     // VenueTuner limit convention: plain below, amber within 3 dB, white on red above.
+    // limit <= 0: no limit (plain value).
     auto big = [&](const juce::String& name, double v, double limit) {
         auto row = r.removeFromTop(56);
         auto head = row.removeFromTop(16);
         caption(g, name, head);
-        g.setColour(dim);
-        g.setFont(mono(10));
-        g.drawText("LIM " + juce::String(limit, 0), head, juce::Justification::centredRight);
-        const bool over = v > limit, near = v > limit - 3;
+        if (limit > 0) {
+            g.setColour(dim);
+            g.setFont(mono(10));
+            g.drawText("LIM " + juce::String(limit, 0), head, juce::Justification::centredRight);
+        }
+        const bool over = limit > 0 && v > limit, near = limit > 0 && v > limit - 3;
         auto value = row.reduced(0, 2);
         if (over) {
             g.setColour(red);
@@ -61,19 +64,26 @@ void SidePanel::paintSpl(juce::Graphics& g, juce::Rectangle<int> r)
         g.drawText(v > -100 ? juce::String(v, 1) : juce::String("--"), value.reduced(over ? 6 : 0, 0), juce::Justification::centredLeft);
     };
     const int w15 = SplMeter::kWindows - 1, w1 = 2; // 15 min, 1 min sliding Leq
-    big("LAeq 15 min", s.leqWindow[size_t(w15)][1] + off, spl.limitLAeq15);
+    big("LA Fast  dB SPL", s.fast[1] + off, 0);
     big("LCeq 15 min", s.leqWindow[size_t(w15)][2] + off, spl.limitLCeq15);
 
-    auto small = [&](const juce::String& name, double v) {
+    // limit > 0: VenueTuner limit colours on the value (amber within 3 dB, white on red over).
+    auto small = [&](const juce::String& name, double v, double limit = 0) {
         auto row = r.removeFromTop(18);
         g.setColour(dim);
         g.setFont(mono(11));
-        g.drawText(name, row, juce::Justification::centredLeft);
-        g.setColour(text);
-        g.drawText(v > -100 ? juce::String(v, 1) : juce::String("--"), row, juce::Justification::centredRight);
+        g.drawText(limit > 0 ? name + "  LIM " + juce::String(limit, 0) : name, row, juce::Justification::centredLeft);
+        const bool over = limit > 0 && v > limit, near = limit > 0 && v > limit - 3;
+        auto value = row.removeFromRight(54);
+        if (over) {
+            g.setColour(red);
+            g.fillRect(value);
+        }
+        g.setColour(over ? juce::Colours::white : near ? amber : text);
+        g.drawText(v > -100 ? juce::String(v, 1) : juce::String("--"), value.withTrimmedRight(over ? 4 : 0), juce::Justification::centredRight);
     };
     r.removeFromTop(4);
-    small("LA FAST", s.fast[1] + off);
+    small("LAeq 15 MIN", s.leqWindow[size_t(w15)][1] + off, spl.limitLAeq15);
     small("LC FAST", s.fast[2] + off);
     small("LAeq 1 MIN", s.leqWindow[size_t(w1)][1] + off);
     small("LCpeak MAX", s.cPeak + off);
