@@ -49,6 +49,7 @@ juce_add_gui_app(FOHScope
   BUNDLE_ID "com.thomaschaudon.fohscope"
   COMPANY_NAME "FOHScope"
   VERSION ${PROJECT_VERSION}
+  ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Resources/AppIcon.png"
   MICROPHONE_PERMISSION_ENABLED TRUE
   HARDENED_RUNTIME_ENABLED FALSE
   MICROPHONE_PERMISSION_TEXT "FOHScope analyses the audio inputs of your interface. It never records or sends audio anywhere.")
