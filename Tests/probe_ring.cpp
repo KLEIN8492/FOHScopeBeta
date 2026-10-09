@@ -8,9 +8,10 @@ TEST_CASE("probe: SignalGen ring timeline", "[.probe]")
 {
     constexpr double sr = 48000;
     fs::Analyser a;
-    a.prepareForTest(sr, 1);
+    auto dev = a.sink("Probe");
+    dev->prepareForTest(sr, 1);
     fs::InputList l;
-    l.add(1);
+    l.add({ "Probe", 0 });
     a.setInputs(l);
     auto noise = fs::test::pink(40, sr, 0.05f);
     std::vector<float> block(256);
@@ -23,7 +24,7 @@ TEST_CASE("probe: SignalGen ring timeline", "[.probe]")
             ++t;
         }
         const float* p = block.data();
-        a.pushTestBlock(&p, 1, 256);
+        dev->pushTestBlock(&p, 1, 256);
         if (b % 8 == 0) {
             a.tick();
             const auto& f = a.latest();

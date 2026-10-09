@@ -27,7 +27,7 @@ void DeltaTrace::reset()
 {
     std::fill(ringA.begin(), ringA.end(), 0.0f);
     std::fill(ringB.begin(), ringB.end(), 0.0f);
-    writePos = filled = sinceEstimate = 0;
+    writeA = writeB = filledA = filledB = sinceEstimate = 0;
     history.clear();
     delay = -1;
     specA.prepare(sr);
@@ -36,20 +36,41 @@ void DeltaTrace::reset()
 
 void DeltaTrace::process(const float* a, const float* b, int n)
 {
+    pushA(a, n);
+    pushB(b, n);
+    maybeEstimate();
+}
+
+// A and B may come from different interfaces, drained at different moments: each keeps its own
+// ring and write position. B reaches its spectrum delayed by the current estimate.
+void DeltaTrace::pushA(const float* a, int n)
+{
+    for (int i = 0; i < n; ++i) {
+        ringA[writeA] = a[i];
+        writeA = (writeA + 1) & mask;
+    }
+    filledA = std::min(filledA + size_t(n), ringA.size());
+    sinceEstimate += size_t(n);
+    specA.process(a, n);
+}
+
+void DeltaTrace::pushB(const float* b, int n)
+{
     delayedB.resize(size_t(n));
     const size_t d = size_t(std::max(delay, 0));
     for (int i = 0; i < n; ++i) {
-        ringA[writePos] = a[i];
-        ringB[writePos] = b[i];
-        delayedB[size_t(i)] = ringB[(writePos - d) & mask];
-        writePos = (writePos + 1) & mask;
+        ringB[writeB] = b[i];
+        delayedB[size_t(i)] = ringB[(writeB - d) & mask];
+        writeB = (writeB + 1) & mask;
     }
-    filled = std::min(filled + size_t(n), ringA.size());
-    specA.process(a, n);
+    filledB = std::min(filledB + size_t(n), ringB.size());
     specB.process(delayedB.data(), n);
+}
 
-    sinceEstimate += size_t(n);
-    if (filled >= size_t(block) && sinceEstimate >= size_t(2.0 * sr)) {
+// Call once both streams are pushed up to the same moment (end of an analysis tick).
+void DeltaTrace::maybeEstimate()
+{
+    if (filledA >= size_t(block) && filledB >= size_t(block) && sinceEstimate >= size_t(2.0 * sr)) {
         sinceEstimate = 0;
         estimateDelay();
     }
@@ -63,9 +84,8 @@ void DeltaTrace::estimateDelay()
     std::fill(fa.begin(), fa.end(), juce::dsp::Complex<float> {});
     std::fill(fb.begin(), fb.end(), juce::dsp::Complex<float> {});
     for (int i = 0; i < block; ++i) {
-        const size_t p = (writePos - size_t(block) + size_t(i)) & mask;
-        fa[size_t(i)] = { ringA[p], 0.0f };
-        fb[size_t(i)] = { ringB[p], 0.0f };
+        fa[size_t(i)] = { ringA[(writeA - size_t(block) + size_t(i)) & mask], 0.0f };
+        fb[size_t(i)] = { ringB[(writeB - size_t(block) + size_t(i)) & mask], 0.0f };
     }
     corrFft->perform(fa.data(), prod.data(), false);
     std::swap(fa, prod);

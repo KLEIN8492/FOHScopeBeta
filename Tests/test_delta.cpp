@@ -51,3 +51,25 @@ TEST_CASE("Delta: unrelated signals never produce a delay")
     for (size_t i = 0; i + 480 <= a.size(); i += 480) d.process(a.data() + i, b.data() + i, 480);
     CHECK_FALSE(d.valid());
 }
+
+TEST_CASE("Delta: A and B pushed separately (two interfaces, 256-sample buffers)")
+{
+    constexpr double sr = 48000;
+    constexpr int delay = 960; // 20 ms
+    auto b = fs::test::pink(7, sr);
+    std::vector<float> a(b.size());
+    for (size_t i = 0; i < a.size(); ++i) a[i] = i >= delay ? 0.5f * b[i - delay] : 0.0f;
+
+    fs::DeltaTrace d;
+    d.prepare(sr);
+    size_t ta = 0, tb = 0;
+    for (size_t t = 480; t <= a.size(); t += 480) { // a 10 ms analysis tick
+        while (ta + 480 <= t) { d.pushA(a.data() + ta, 480); ta += 480; }
+        while (tb + 256 <= t) { d.pushB(b.data() + tb, 256); tb += 256; }
+        d.maybeEstimate();
+    }
+    REQUIRE(d.valid());
+    // Across interfaces B can trail A by up to one buffer (256 = 5.3 ms) when it is measured;
+    // within one interface (process()) the delay is sample-exact.
+    CHECK_THAT(d.delayMs(), WithinAbs(20.0, 5.4));
+}

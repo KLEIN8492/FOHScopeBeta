@@ -14,7 +14,10 @@ public:
     static constexpr double kMaxDelaySec = 0.35; // ≈ 120 m of air
 
     void prepare(double sampleRate);
-    void process(const float* a, const float* b, int n);
+    void process(const float* a, const float* b, int n); // same clock: pushA + pushB + maybeEstimate
+    void pushA(const float* a, int n);
+    void pushB(const float* b, int n);
+    void maybeEstimate();
     void reset();
 
     bool valid() const { return delay >= 0 && specA.hasData() && specB.hasData(); }
@@ -28,7 +31,7 @@ private:
     double sr = 48000;
     MtwSpectrum specA, specB;
     std::vector<float> ringA, ringB, delayedB;
-    size_t mask = 0, writePos = 0, filled = 0, sinceEstimate = 0;
+    size_t mask = 0, writeA = 0, writeB = 0, filledA = 0, filledB = 0, sinceEstimate = 0;
     int corrOrder = 0, block = 0, maxLag = 0;
     std::unique_ptr<juce::dsp::FFT> corrFft;
     std::vector<juce::dsp::Complex<float>> fa, fb, prod;

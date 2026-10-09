@@ -2,32 +2,10 @@
 
 namespace fs {
 
-Settings& Settings::operator=(const Settings& o)
-{
-    if (this == &o) return *this;
-    inputs = o.inputs;
-    averaging = o.averaging;
-    bandsPerOctave = o.bandsPerOctave;
-    showBars = o.showBars;
-    showDelta = o.showDelta;
-    peaks = o.peaks;
-    splOffset = o.splOffset;
-    calibration = o.calibration;
-    limitLAeq15 = o.limitLAeq15;
-    limitLCeq15 = o.limitLCeq15;
-    spectrogramSeconds = o.spectrogramSeconds;
-    spectrogramFloor = o.spectrogramFloor;
-    spectrogramTop = o.spectrogramTop;
-    displayTop = o.displayTop;
-    displayRange = o.displayRange;
-    deviceState = o.deviceState ? std::make_unique<juce::XmlElement>(*o.deviceState) : nullptr;
-    return *this;
-}
-
 std::unique_ptr<juce::XmlElement> Settings::toXml() const
 {
     auto x = std::make_unique<juce::XmlElement>("FOHScope");
-    x->setAttribute("version", 1);
+    x->setAttribute("version", 2);
     x->setAttribute("averaging", int(averaging));
     x->setAttribute("bandsPerOctave", bandsPerOctave);
     x->setAttribute("showBars", showBars);
@@ -53,12 +31,15 @@ std::unique_ptr<juce::XmlElement> Settings::toXml() const
         auto* e = in->createNewChildElement("Input");
         e->setAttribute("id", i.id);
         e->setAttribute("name", i.name);
-        e->setAttribute("channel", i.channel);
+        e->setAttribute("port", i.port.valid() ? encodePort(i.port) : juce::String());
         e->setAttribute("colour", i.colour.toString());
         e->setAttribute("muted", i.muted);
         e->setAttribute("splMic", i.splMic);
     }
-    if (deviceState) x->addChildElement(new juce::XmlElement(*deviceState));
+    auto* audio = x->createNewChildElement("Audio");
+    audio->setAttribute("rate", sampleRate);
+    audio->setAttribute("buffer", bufferSize);
+    audio->setAttribute("lastDevice", lastDevice);
     return x;
 }
 
@@ -81,6 +62,20 @@ Settings Settings::fromXml(const juce::XmlElement& x)
     s.displayTop = float(x.getDoubleAttribute("displayTop", s.displayTop));
     s.displayRange = float(x.getDoubleAttribute("displayRange", s.displayRange));
 
+    // v1 stored a bare channel of the one device in DEVICESETUP; v2 stores a port per input.
+    juce::String v1Device;
+    if (auto* d = x.getChildByName("DEVICESETUP")) {
+        v1Device = d->getStringAttribute("audioInputDeviceName");
+        s.sampleRate = d->getDoubleAttribute("audioDeviceRate", s.sampleRate);
+        s.bufferSize = d->getIntAttribute("audioDeviceBufferSize", s.bufferSize);
+        s.lastDevice = v1Device;
+    }
+    if (auto* a = x.getChildByName("Audio")) {
+        s.sampleRate = a->getDoubleAttribute("rate", s.sampleRate);
+        s.bufferSize = a->getIntAttribute("buffer", s.bufferSize);
+        s.lastDevice = a->getStringAttribute("lastDevice", s.lastDevice);
+    }
+
     if (auto* in = x.getChildByName("Inputs")) {
         s.inputs.focusedId = in->getIntAttribute("focused");
         s.inputs.deltaA = in->getIntAttribute("deltaA", -1);
@@ -88,14 +83,18 @@ Settings Settings::fromXml(const juce::XmlElement& x)
         s.inputs.nextColour = in->getIntAttribute("nextColour");
         for (auto* e : in->getChildWithTagNameIterator("Input")) {
             if (int(s.inputs.inputs.size()) >= InputList::kMax) break;
-            s.inputs.inputs.push_back({ e->getIntAttribute("id"), e->getStringAttribute("name"), juce::jmax(0, e->getIntAttribute("channel")),
+            PortRef port;
+            if (e->hasAttribute("port")) {
+                if (auto p = decodePort(e->getStringAttribute("port"))) port = *p;
+            } else {
+                port = { v1Device, juce::jmax(0, e->getIntAttribute("channel")) };
+            }
+            s.inputs.inputs.push_back({ e->getIntAttribute("id"), e->getStringAttribute("name"), port,
                                         juce::Colour::fromString(e->getStringAttribute("colour")), e->getBoolAttribute("muted"),
                                         e->getBoolAttribute("splMic") });
         }
     }
-    if (s.inputs.inputs.empty()) s.inputs.add(1);
-    if (!s.inputs.find(s.inputs.focusedId)) s.inputs.focusedId = s.inputs.inputs.front().id;
-    if (auto* d = x.getChildByName("DEVICESETUP")) s.deviceState = std::make_unique<juce::XmlElement>(*d);
+    if (!s.inputs.find(s.inputs.focusedId)) s.inputs.focusedId = s.inputs.inputs.empty() ? 0 : s.inputs.inputs.front().id;
     return s;
 }
 
@@ -108,9 +107,7 @@ Settings Settings::load()
 {
     if (auto x = juce::XmlDocument::parse(directory().getChildFile("settings.xml")))
         if (x->hasTagName("FOHScope")) return fromXml(*x);
-    Settings s;
-    s.inputs.add(1);
-    return s;
+    return {};
 }
 
 bool Settings::save() const

@@ -1,4 +1,5 @@
 #pragma once
+#include "core/PortRef.h"
 #include <juce_graphics/juce_graphics.h>
 #include <algorithm>
 #include <vector>
@@ -23,7 +24,7 @@ struct Input
 {
     int id = 0;
     juce::String name;
-    int channel = 0;      // 0-based device input channel
+    PortRef port;         // interface + 0-based channel; empty device = not patched
     juce::Colour colour;
     bool muted = false;   // hidden and not analysed
     bool splMic = false;  // the calibrated measurement mic (SPL meter + logging)
@@ -31,7 +32,7 @@ struct Input
 
 struct InputList
 {
-    static constexpr int kMax = 16;
+    static constexpr int kMax = 16; // and 0 is allowed: the routing page starts empty
 
     std::vector<Input> inputs;
     int focusedId = 0;
@@ -50,27 +51,32 @@ struct InputList
         return it == inputs.end() ? nullptr : &*it;
     }
 
-    // Adds an input on the next unused channel with the next palette colour. Returns its id or -1.
-    int add(int deviceChannels)
+    // Adds an input on `port` with the next palette colour. Returns its id, or -1 when full.
+    // The first input becomes the SPL mic and gets the focus.
+    int add(const PortRef& port)
     {
         if (int(inputs.size()) >= kMax) return -1;
         int id = 1;
         for (auto& i : inputs) id = std::max(id, i.id + 1);
-        int ch = 0;
-        while (ch < std::max(deviceChannels, 1) - 1 && std::any_of(inputs.begin(), inputs.end(), [ch](auto& i) { return i.channel == ch; })) ++ch;
-        inputs.push_back({ id, "Input " + juce::String(ch + 1), ch, Palette::colour(nextColour++), false, inputs.empty() });
+        inputs.push_back({ id, "Input " + juce::String(id), port, Palette::colour(nextColour++), false, inputs.empty() });
         if (inputs.size() == 1) focusedId = id;
         return id;
     }
 
-    // Never removes the last input.
+    // Next channel of `device` that no input uses yet (0 if all are used or none exist).
+    int nextFreeChannel(const juce::String& device, int channels) const
+    {
+        for (int ch = 0; ch < channels; ++ch)
+            if (std::none_of(inputs.begin(), inputs.end(), [&](auto& i) { return i.port == PortRef { device, ch }; })) return ch;
+        return 0;
+    }
+
     bool remove(int id)
     {
-        if (inputs.size() <= 1) return false;
         const auto before = inputs.size();
         inputs.erase(std::remove_if(inputs.begin(), inputs.end(), [id](auto& i) { return i.id == id; }), inputs.end());
         if (inputs.size() == before) return false;
-        if (focusedId == id) focusedId = inputs.front().id;
+        if (focusedId == id) focusedId = inputs.empty() ? 0 : inputs.front().id;
         if (deltaA == id) deltaA = -1;
         if (deltaB == id) deltaB = -1;
         return true;
@@ -84,7 +90,7 @@ struct InputList
     bool operator==(const InputList& o) const
     {
         auto same = [](const Input& a, const Input& b) {
-            return a.id == b.id && a.name == b.name && a.channel == b.channel && a.colour == b.colour && a.muted == b.muted && a.splMic == b.splMic;
+            return a.id == b.id && a.name == b.name && a.port == b.port && a.colour == b.colour && a.muted == b.muted && a.splMic == b.splMic;
         };
         return focusedId == o.focusedId && deltaA == o.deltaA && deltaB == o.deltaB && nextColour == o.nextColour
                && std::equal(inputs.begin(), inputs.end(), o.inputs.begin(), o.inputs.end(), same);

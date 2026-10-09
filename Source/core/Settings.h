@@ -25,20 +25,17 @@ struct Settings
     float spectrogramFloor = -95.0f, spectrogramTop = -25.0f; // dBFS (AES17) colour range
     float displayTop = 0.0f, displayRange = 90.0f;             // spectrum y axis, dBFS
 
-    std::unique_ptr<juce::XmlElement> deviceState; // AudioDeviceManager::createStateXml()
+    // Audio: every interface opens at this shared rate / buffer (no resampling).
+    double sampleRate = 48000.0;
+    int bufferSize = 256;
+    juce::String lastDevice; // interface the next new input starts on
 
     std::unique_ptr<juce::XmlElement> toXml() const;
     static Settings fromXml(const juce::XmlElement&);
 
     static juce::File directory(); // ~/Library/Application Support/FOHScope
-    static Settings load();        // defaults (one input) when missing or unreadable
+    static Settings load();        // defaults (no inputs) when missing or unreadable
     bool save() const;
-
-    Settings() = default;
-    Settings(const Settings& o) { *this = o; }
-    Settings& operator=(const Settings&);
-    Settings(Settings&&) = default;
-    Settings& operator=(Settings&&) = default;
 };
 
 } // namespace fs
