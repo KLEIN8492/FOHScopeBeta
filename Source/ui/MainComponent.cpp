@@ -98,13 +98,27 @@ void MainComponent::apply(const Settings& s)
     analyser.setBandsPerOctave(settings.bandsPerOctave);
     analyser.setPeakParams(settings.peaks);
     analyser.setSplOffset(settings.splOffset);
-    spectrograph.configure(settings.spectrogramSeconds, settings.spectrogramFloor, settings.spectrogramTop);
+    configureSpectrograph();
     hub.setFormat(settings.sampleRate, settings.bufferSize);
     updateWanted();
     settings.save();
     updateBar();
     showFrame(analyser.latest(), true); // inputs / display changed: redraw even without new audio
     if (settingsWindow) settingsWindow->refresh();
+}
+
+// dB SPL when the spectrograph shows the SPL mic (the only input with an acoustic level).
+void MainComponent::configureSpectrograph()
+{
+    const auto* focused = settings.inputs.find(settings.inputs.focusedId);
+    const auto* mic = settings.inputs.splMic();
+    SpectrographView::Units u;
+    u.spl = focused && mic && focused->id == mic->id;
+    u.splOffset = settings.splOffset;
+    u.estimate = settings.calibration == "estimate";
+    u.floor = u.spl ? settings.spectrogramFloorSpl : settings.spectrogramFloor;
+    u.top = u.spl ? settings.spectrogramTopSpl : settings.spectrogramTop;
+    spectrograph.configure(settings.spectrogramSeconds, u);
 }
 
 void MainComponent::updateBar()

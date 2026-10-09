@@ -22,7 +22,8 @@ struct Settings
     double limitLAeq15 = 102.0, limitLCeq15 = 118.0;
 
     int spectrogramSeconds = 30;          // 10 / 30 / 60
-    float spectrogramFloor = -95.0f, spectrogramTop = -25.0f; // dBFS (AES17) colour range
+    float spectrogramFloor = -95.0f, spectrogramTop = -25.0f;   // dBFS (AES17) colour range
+    float spectrogramFloorSpl = 20.0f, spectrogramTopSpl = 90.0f; // dB SPL, when showing the SPL mic
     float displayTop = 0.0f, displayRange = 90.0f;             // spectrum y axis, dBFS
 
     // Audio: every interface opens at this shared rate / buffer (no resampling).

@@ -4,10 +4,13 @@ namespace fs {
 
 using namespace theme;
 
-void SpectrographView::configure(int s, float floorDbfs, float topDbfs)
+void SpectrographView::configure(int s, const Units& u)
 {
-    floorDb = floorDbfs;
-    topDb = std::max(topDbfs, floorDbfs + 10);
+    if (!(u == units)) {
+        units = u;
+        units.top = std::max(u.top, u.floor + 10);
+        repaint();
+    }
     if (s == seconds && image.isValid()) return;
     seconds = s;
     rows = seconds * kRowsPerSecond;
@@ -29,7 +32,8 @@ void SpectrographView::addColumn(const float* col)
     const auto& lut = heatMap();
     juce::Image::BitmapData px(image, 0, head, grid::kPoints, 1, juce::Image::BitmapData::writeOnly);
     for (int i = 0; i < grid::kPoints; ++i) {
-        const float t = (col[i] + kAes17 - floorDb) / (topDb - floorDb);
+        const float level = col[i] + (units.spl ? float(units.splOffset) : kAes17);
+        const float t = (level - units.floor) / (units.top - units.floor);
         const auto c = lut[size_t(juce::jlimit(0, 255, int(t * 255.0f)))];
         px.setPixelColour(i, 0, juce::Colour(c));
     }
@@ -72,6 +76,31 @@ void SpectrographView::paint(juce::Graphics& g)
         g.setFont(mono(10.5f, true));
         g.drawText(label.toUpperCase(), r.reduced(6, 0), juce::Justification::centredLeft);
     }
+    paintLegend(g, plot);
+}
+
+// Colour legend, top-right inside the plot: the heat ramp with its floor / top and units.
+void SpectrographView::paintLegend(juce::Graphics& g, juce::Rectangle<float> plot)
+{
+    const auto unit = units.spl ? juce::String(units.estimate ? "dB SPL (est.)" : "dB SPL") : juce::String("dBFS");
+    auto box = juce::Rectangle<float>(plot.getRight() - 236, plot.getY() + 6, 230, 30);
+    g.setColour(well.withAlpha(0.9f));
+    g.fillRect(box);
+    g.setColour(line);
+    g.drawRect(box);
+    auto inner = box.reduced(6, 4);
+    auto ramp = inner.removeFromTop(8);
+    const auto& lut = heatMap();
+    for (int x = 0; x < int(ramp.getWidth()); ++x) {
+        g.setColour(juce::Colour(lut[size_t(juce::jlimit(0, 255, int(255.0f * float(x) / ramp.getWidth())))]));
+        g.fillRect(ramp.getX() + float(x), ramp.getY(), 1.0f, ramp.getHeight());
+    }
+    g.setFont(mono(9.5f));
+    g.setColour(text);
+    g.drawText(juce::String(juce::roundToInt(units.floor)), inner, juce::Justification::bottomLeft);
+    g.drawText(juce::String(juce::roundToInt(units.top)), inner, juce::Justification::bottomRight);
+    g.setColour(units.spl && units.estimate ? amber : dim);
+    g.drawText(unit, inner, juce::Justification::centredBottom);
 }
 
 } // namespace fs

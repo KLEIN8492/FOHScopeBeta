@@ -22,6 +22,8 @@ public:
         slider(hold, 0.3, 5, 0.1, " s", [](Settings& s, double v) { s.peaks.holdSec = float(v); });
         slider(floorDb, -150, -40, 1, " dBFS", [](Settings& s, double v) { s.spectrogramFloor = float(v); });
         slider(topDb, -100, 0, 1, " dBFS", [](Settings& s, double v) { s.spectrogramTop = float(v); });
+        slider(floorSpl, 0, 100, 1, " dB SPL", [](Settings& s, double v) { s.spectrogramFloorSpl = float(v); });
+        slider(topSpl, 30, 140, 1, " dB SPL", [](Settings& s, double v) { s.spectrogramTopSpl = float(v); });
         slider(displayTop, -40, 20, 1, " dBFS", [](Settings& s, double v) { s.displayTop = float(v); });
         slider(displayRange, 30, 150, 5, " dB", [](Settings& s, double v) { s.displayRange = float(v); });
 
@@ -57,6 +59,8 @@ public:
         hold.setValue(s.peaks.holdSec, juce::dontSendNotification);
         floorDb.setValue(s.spectrogramFloor, juce::dontSendNotification);
         topDb.setValue(s.spectrogramTop, juce::dontSendNotification);
+        floorSpl.setValue(s.spectrogramFloorSpl, juce::dontSendNotification);
+        topSpl.setValue(s.spectrogramTopSpl, juce::dontSendNotification);
         displayTop.setValue(s.displayTop, juce::dontSendNotification);
         displayRange.setValue(s.displayRange, juce::dontSendNotification);
         const auto* mic = s.inputs.splMic();
@@ -116,8 +120,10 @@ public:
         row("Must ring for", hold);
         heading("SPECTROGRAPH");
         row("History", history, 120);
-        row("Colour floor", floorDb);
-        row("Colour top", topDb);
+        row("Colour floor (dBFS)", floorDb);
+        row("Colour top (dBFS)", topDb);
+        row("Colour floor (SPL mic)", floorSpl);
+        row("Colour top (SPL mic)", topSpl);
         heading("SPECTRUM DISPLAY");
         row("Top of scale", displayTop);
         row("Range", displayRange);
@@ -156,7 +162,7 @@ private:
 
     Hooks hooks;
     juce::ComboBox history;
-    juce::Slider offset, laeq, lceq, threshold, hold, floorDb, topDb, displayTop, displayRange;
+    juce::Slider offset, laeq, lceq, threshold, hold, floorDb, topDb, floorSpl, topSpl, displayTop, displayRange;
     juce::TextButton cal94 { "94 dB" }, cal114 { "114 dB" }, refSet { "Set" }, openLogs { "Open log folder" };
     juce::Slider refLevel;
     juce::Label calStatus;

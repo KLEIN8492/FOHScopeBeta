@@ -21,6 +21,8 @@ TEST_CASE("Settings v2 round-trip through XML")
     s.calibration = "calibrator";
     s.limitLAeq15 = 100;
     s.spectrogramSeconds = 60;
+    s.spectrogramFloorSpl = 35;
+    s.spectrogramTopSpl = 105;
     s.sampleRate = 96000;
     s.bufferSize = 128;
     s.lastDevice = "BlackHole 16ch";
@@ -37,6 +39,8 @@ TEST_CASE("Settings v2 round-trip through XML")
     CHECK(back.calibration == "calibrator");
     CHECK(back.limitLAeq15 == 100);
     CHECK(back.spectrogramSeconds == 60);
+    CHECK(back.spectrogramFloorSpl == 35);
+    CHECK(back.spectrogramTopSpl == 105);
     CHECK(back.sampleRate == 96000);
     CHECK(back.bufferSize == 128);
     CHECK(back.lastDevice == "BlackHole 16ch");

@@ -19,6 +19,8 @@ std::unique_ptr<juce::XmlElement> Settings::toXml() const
     x->setAttribute("spectrogramSeconds", spectrogramSeconds);
     x->setAttribute("spectrogramFloor", double(spectrogramFloor));
     x->setAttribute("spectrogramTop", double(spectrogramTop));
+    x->setAttribute("spectrogramFloorSpl", double(spectrogramFloorSpl));
+    x->setAttribute("spectrogramTopSpl", double(spectrogramTopSpl));
     x->setAttribute("displayTop", double(displayTop));
     x->setAttribute("displayRange", double(displayRange));
 
@@ -59,6 +61,8 @@ Settings Settings::fromXml(const juce::XmlElement& x)
     s.spectrogramSeconds = x.getIntAttribute("spectrogramSeconds", s.spectrogramSeconds);
     s.spectrogramFloor = float(x.getDoubleAttribute("spectrogramFloor", s.spectrogramFloor));
     s.spectrogramTop = float(x.getDoubleAttribute("spectrogramTop", s.spectrogramTop));
+    s.spectrogramFloorSpl = float(x.getDoubleAttribute("spectrogramFloorSpl", s.spectrogramFloorSpl));
+    s.spectrogramTopSpl = float(x.getDoubleAttribute("spectrogramTopSpl", s.spectrogramTopSpl));
     s.displayTop = float(x.getDoubleAttribute("displayTop", s.displayTop));
     s.displayRange = float(x.getDoubleAttribute("displayRange", s.displayRange));
 

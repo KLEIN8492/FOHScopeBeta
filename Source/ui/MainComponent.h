@@ -33,6 +33,7 @@ private:
     void capture();
     void updateBar();
     void showFrame(const Frame&, bool withSidePanel);
+    void configureSpectrograph();
     void setScale(DbScale);
     void fitScale();
     std::optional<float> loudestDb(const Frame&) const;
