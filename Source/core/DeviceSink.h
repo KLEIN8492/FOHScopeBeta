@@ -13,7 +13,7 @@ namespace fs {
 class DeviceSink : public juce::AudioIODeviceCallback
 {
 public:
-    explicit DeviceSink(juce::String deviceName) : deviceName(std::move(deviceName)) {}
+    explicit DeviceSink(juce::String name_) : deviceName(std::move(name_)) {}
 
     const juce::String& name() const { return deviceName; }
     double sampleRate() const { return rate.load(); }
