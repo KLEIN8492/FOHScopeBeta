@@ -1,0 +1,128 @@
+# Builds, tests, smoke-launches and packages FOHScope on macOS, Windows and Linux.
+# Every push / PR: packages kept as workflow artifacts. Tag vX.Y.Z: GitHub Release with all files.
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*.*.*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tests
+        run: |
+          cmake -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target FOHScopeTests -j"$(sysctl -n hw.ncpu)"
+      - name: Unit tests
+        run: ./build/FOHScopeTests
+      - name: Universal app + dmg
+        run: scripts/package-mac.sh build-universal
+      - name: Smoke launch
+        run: |
+          APP=build-universal/FOHScope_artefacts/Release/FOHScope.app/Contents/MacOS/FOHScope
+          "$APP" --smoke-test & P=$!
+          for i in $(seq 1 60); do kill -0 $P 2>/dev/null || break; sleep 1; done
+          if kill -0 $P 2>/dev/null; then echo "FOHScope hung"; kill $P; exit 1; fi
+          wait $P
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/*.dmg
+          retention-days: 7
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build
+        run: cmake --build build --config Release --target FOHScope FOHScopeTests --parallel
+      - name: Unit tests
+        run: build\Release\FOHScopeTests.exe
+      - name: Smoke launch
+        shell: pwsh
+        run: |
+          $p = Start-Process -PassThru build\FOHScope_artefacts\Release\FOHScope.exe -ArgumentList '--smoke-test'
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "FOHScope hung" }
+          if ($p.ExitCode -ne 0) { throw "FOHScope exited with $($p.ExitCode)" }
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Installer + zip
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -BuildDir build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+          retention-days: 7
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libxrender-dev libgl1-mesa-dev libcurl4-openssl-dev xvfb
+      - name: Build
+        run: |
+          cmake -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target FOHScope FOHScopeTests -j"$(nproc)"
+      - name: Unit tests
+        run: ./build/FOHScopeTests
+      - name: Smoke launch (no sound card on the runner)
+        run: |
+          xvfb-run -a ./build/FOHScope_artefacts/Release/FOHScope --smoke-test & P=$!
+          for i in $(seq 1 60); do kill -0 $P 2>/dev/null || break; sleep 1; done
+          if kill -0 $P 2>/dev/null; then echo "FOHScope hung"; kill $P; exit 1; fi
+          wait $P
+      - name: AppImage
+        run: |
+          mkdir -p tools
+          curl -fsSL -o tools/linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x tools/linuxdeploy-x86_64.AppImage
+          scripts/package-linux.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.AppImage
+          retention-days: 7
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mac, windows, linux]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the project version
+        run: |
+          VER=$(cmake -P scripts/version.cmake)
+          if [ "v$VER" != "$GITHUB_REF_NAME" ]; then echo "tag $GITHUB_REF_NAME != version $VER"; exit 1; fi
+          echo "VER=$VER" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="## $VER" '$0 == v {on=1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no '## $VER' section in CHANGELOG.md"; exit 1; }
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "FOHScope $VER" --notes-file notes.md
