@@ -73,7 +73,7 @@ public:
         window = std::make_unique<MainWindow>(commands);
         // CI: start everything for real (window, analyser, device scan), then quit cleanly.
         // A crash or hang on any OS fails the build.
-        if (commandLine.contains("--smoke-test")) juce::Timer::callAfterDelay(4000, [this] { quit(); });
+        if (commandLine.contains("--smoke-test")) juce::Timer::callAfterDelay(4000, [] { juce::JUCEApplication::quit(); });
     }
     void shutdown() override
     {
