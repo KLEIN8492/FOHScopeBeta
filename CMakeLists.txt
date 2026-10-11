@@ -47,6 +47,13 @@ endif()
 
 add_library(fs_warning_tweaks INTERFACE)
 target_compile_options(fs_warning_tweaks INTERFACE -Wno-float-equal)
+# Interface font for Windows / Linux (macOS uses Menlo): JetBrains Mono, SIL OFL 1.1.
+juce_add_binary_data(fs_fonts NAMESPACE FontData HEADER_NAME FontData.h SOURCES
+  Resources/fonts/JetBrainsMono-Regular.ttf
+  Resources/fonts/JetBrainsMono-Bold.ttf)
+set_target_properties(fs_fonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(fs_core PUBLIC fs_fonts)
+
 # JUCE modules are compiled once, into fs_core (PRIVATE); dependents get headers + defines only.
 target_link_libraries(fs_core
   PRIVATE juce::juce_audio_utils juce::juce_audio_devices juce::juce_dsp juce::juce_gui_extra

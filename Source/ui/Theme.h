@@ -1,5 +1,6 @@
 #pragma once
 #include "dsp/FreqGrid.h"
+#include <FontData.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <array>
 #include <cmath>
@@ -28,7 +29,23 @@ inline juce::String shortcut(const juce::String& key)
 // dB re FS RMS (internal) → dBFS as shown (AES17: a full-scale sine reads 0 dBFS).
 constexpr float kAes17 = 3.0103f;
 
-inline juce::Font mono(float h, bool bold = false) { return juce::Font(juce::FontOptions("Menlo", h, bold ? juce::Font::bold : juce::Font::plain)); }
+// JetBrains Mono embedded in the app (Windows / Linux interface font; loaded once).
+inline juce::Typeface::Ptr embeddedMono(bool bold)
+{
+    static const auto regular = juce::Typeface::createSystemTypefaceFor(FontData::JetBrainsMonoRegular_ttf, FontData::JetBrainsMonoRegular_ttfSize);
+    static const auto boldFace = juce::Typeface::createSystemTypefaceFor(FontData::JetBrainsMonoBold_ttf, FontData::JetBrainsMonoBold_ttfSize);
+    return bold ? boldFace : regular;
+}
+
+// The interface font: Menlo on macOS, embedded JetBrains Mono elsewhere (same look everywhere).
+inline juce::Font mono(float h, bool bold = false)
+{
+#if JUCE_MAC
+    return juce::Font(juce::FontOptions("Menlo", h, bold ? juce::Font::bold : juce::Font::plain));
+#else
+    return juce::Font(juce::FontOptions(embeddedMono(bold)).withHeight(h));
+#endif
+}
 
 // Small uppercase caption: section titles, column headers, field labels.
 inline void caption(juce::Graphics& g, const juce::String& s, juce::Rectangle<int> r, juce::Justification j = juce::Justification::centredLeft)
@@ -145,9 +162,13 @@ public:
     juce::Typeface::Ptr getTypefaceForFont(const juce::Font& f) override
     {
         if (f.getTypefaceName() == juce::Font::getDefaultSansSerifFontName()) {
+#if JUCE_MAC
             auto m = f;
             m.setTypefaceName("Menlo");
             return juce::Typeface::createSystemTypefaceFor(m);
+#else
+            return embeddedMono(f.isBold());
+#endif
         }
         return LookAndFeel_V4::getTypefaceForFont(f);
     }

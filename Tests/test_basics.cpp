@@ -59,3 +59,15 @@ TEST_CASE("Shortcut text matches the platform's command key")
     CHECK(fs::theme::shortcut(",") == "CTRL+,");
 #endif
 }
+
+TEST_CASE("Embedded JetBrains Mono (Windows / Linux interface font) loads from the app's binary data")
+{
+    for (bool bold : { false, true }) {
+        auto tf = fs::theme::embeddedMono(bold);
+        REQUIRE(tf != nullptr);
+        CHECK(tf->getName() == "JetBrains Mono");
+    }
+#if !JUCE_MAC
+    CHECK(fs::theme::mono(11).getTypefacePtr() == fs::theme::embeddedMono(false));
+#endif
+}
