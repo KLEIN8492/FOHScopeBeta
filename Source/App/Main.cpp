@@ -66,11 +66,14 @@ public:
     const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
     bool moreThanOneInstanceAllowed() override { return false; }
 
-    void initialise(const juce::String&) override
+    void initialise(const juce::String& commandLine) override
     {
         juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
         commands.registerAllCommandsForTarget(this);
         window = std::make_unique<MainWindow>(commands);
+        // CI: start everything for real (window, analyser, device scan), then quit cleanly.
+        // A crash or hang on any OS fails the build.
+        if (commandLine.contains("--smoke-test")) juce::Timer::callAfterDelay(4000, [this] { quit(); });
     }
     void shutdown() override
     {
