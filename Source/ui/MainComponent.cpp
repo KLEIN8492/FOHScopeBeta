@@ -50,11 +50,15 @@ MainComponent::MainComponent()
     hub.setFormat(settings.sampleRate, settings.bufferSize);
     analyser.startAnalysis();
     hub.start(); // scans and opens on its own thread: the window never waits for a driver
+#if JUCE_MAC
     // macOS asks for microphone access once; until it is answered nothing is opened (inputs
     // would read silence).
     juce::RuntimePermissions::request(juce::RuntimePermissions::recordAudio, [safe = juce::Component::SafePointer(this)](bool) {
         if (safe) safe->hub.setOpeningAllowed(true);
     });
+#else
+    hub.setOpeningAllowed(true); // no OS-level microphone gate on Windows / Linux
+#endif
     apply(settings);
     setSize(1400, 860);
     startTimerHz(60);
@@ -323,7 +327,7 @@ void MainComponent::paint(juce::Graphics& g)
     if (settings.inputs.splMic()) item(logStatus.isEmpty() ? "LOG OK" : "LOG FAIL", logStatus.isEmpty() ? ok : red);
     if (frozen) item("FROZEN", amber);
     g.setColour(dim);
-    g.drawText("CMD+, SETUP", status.reduced(8, 0), juce::Justification::centredRight);
+    g.drawText(shortcut(",") + " SETUP", status.reduced(8, 0), juce::Justification::centredRight);
 
     if (deviceLost) {
         auto banner = getLocalBounds().withTrimmedTop(kStatusHeight + kBarHeight).removeFromTop(kBannerHeight);

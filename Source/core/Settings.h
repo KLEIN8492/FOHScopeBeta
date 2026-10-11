@@ -34,9 +34,12 @@ struct Settings
     std::unique_ptr<juce::XmlElement> toXml() const;
     static Settings fromXml(const juce::XmlElement&);
 
-    static juce::File directory(); // ~/Library/Application Support/FOHScope
+    // macOS ~/Library/Application Support/FOHScope · Windows %APPDATA%\FOHScope · Linux ~/.config/FOHScope
+    static juce::File directory();
     static Settings load();        // defaults (no inputs) when missing or unreadable
     bool save() const;
+    static Settings loadFrom(const juce::File& xmlFile);
+    bool saveTo(const juce::File& xmlFile) const; // creates missing folders
 };
 
 } // namespace fs

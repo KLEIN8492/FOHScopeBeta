@@ -20,13 +20,25 @@ public:
         centreWithSize(getWidth(), getHeight());
 
         setApplicationCommandManagerToWatch(&commands);
+#if JUCE_MAC
         appleExtras.addCommandItem(&commands, kSettings, fs::theme::utf8("Settings…"));
         juce::MenuBarModel::setMacMainMenu(this, &appleExtras);
+#else
+        setMenuBar(this); // Windows / Linux: in-window menu bar, same commands (Ctrl+,)
+        addKeyListener(commands.getKeyMappings());
+#endif
         setVisible(true);
         content->grabKeyboardFocus();
     }
 
-    ~MainWindow() override { juce::MenuBarModel::setMacMainMenu(nullptr); }
+    ~MainWindow() override
+    {
+#if JUCE_MAC
+        juce::MenuBarModel::setMacMainMenu(nullptr);
+#else
+        setMenuBar(nullptr);
+#endif
+    }
 
     void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
     fs::MainComponent& main() { return *content; }

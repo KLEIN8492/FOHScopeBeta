@@ -34,6 +34,17 @@ target_compile_definitions(fs_core PUBLIC
   JUCE_STANDALONE_APPLICATION=1
   JUCE_APPLICATION_NAME_STRING="FOHScope"
   JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
+# Audio drivers per OS (DeviceHub opens every type that is compiled in).
+if(WIN32)
+  # ASIO uses the Steinberg headers bundled with JUCE 8 (ASIO licence or GPLv3; FOHScope is AGPLv3).
+  target_compile_definitions(fs_core PUBLIC JUCE_ASIO=1 JUCE_WASAPI=1 JUCE_DIRECTSOUND=0 _USE_MATH_DEFINES NOMINMAX)
+  if(MSVC)
+    target_compile_options(fs_core PUBLIC /utf-8 /bigobj)
+  endif()
+elseif(UNIX AND NOT APPLE)
+  target_compile_definitions(fs_core PUBLIC JUCE_ALSA=1 JUCE_JACK=1)
+endif()
+
 add_library(fs_warning_tweaks INTERFACE)
 target_compile_options(fs_warning_tweaks INTERFACE -Wno-float-equal)
 # JUCE modules are compiled once, into fs_core (PRIVATE); dependents get headers + defines only.

@@ -48,3 +48,14 @@ TEST_CASE("SPSC FIFO round trip")
     CHECK(out[4] == 5);
     CHECK(f.available() == 3);
 }
+
+#include "ui/Theme.h"
+
+TEST_CASE("Shortcut text matches the platform's command key")
+{
+#if JUCE_MAC
+    CHECK(fs::theme::shortcut(",") == "CMD+,");
+#else
+    CHECK(fs::theme::shortcut(",") == "CTRL+,");
+#endif
+}

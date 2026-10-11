@@ -104,21 +104,29 @@ Settings Settings::fromXml(const juce::XmlElement& x)
 
 juce::File Settings::directory()
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("Application Support/FOHScope");
+    const auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+#if JUCE_MAC
+    return base.getChildFile("Application Support/FOHScope"); // base is ~/Library
+#else
+    return base.getChildFile("FOHScope"); // %APPDATA% on Windows, ~/.config on Linux
+#endif
 }
 
-Settings Settings::load()
+Settings Settings::loadFrom(const juce::File& file)
 {
-    if (auto x = juce::XmlDocument::parse(directory().getChildFile("settings.xml")))
+    if (auto x = juce::XmlDocument::parse(file))
         if (x->hasTagName("FOHScope")) return fromXml(*x);
     return {};
 }
 
-bool Settings::save() const
+bool Settings::saveTo(const juce::File& file) const
 {
-    const auto dir = directory();
-    if (!dir.isDirectory() && !dir.createDirectory()) return false;
-    return toXml()->writeTo(dir.getChildFile("settings.xml"));
+    if (!file.getParentDirectory().createDirectory()) return false;
+    return toXml()->writeTo(file);
 }
+
+Settings Settings::load() { return loadFrom(directory().getChildFile("settings.xml")); }
+
+bool Settings::save() const { return saveTo(directory().getChildFile("settings.xml")); }
 
 } // namespace fs

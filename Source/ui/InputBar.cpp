@@ -12,7 +12,7 @@ public:
     {
         setRepaintsOnMouseActivity(true);
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        setTooltip("Click: focus. Right-click: rename, channel, colour, SPL mic, delta, remove. Full routing: CMD+,");
+        setTooltip("Click: focus. Right-click: rename, channel, colour, SPL mic, delta, remove. Full routing: " + shortcut(","));
     }
 
     int preferredWidth() const
@@ -112,7 +112,7 @@ InputBar::InputBar()
     setup(delta, utf8("A − B delta trace (D)"));
     setup(freeze, "Freeze the display (Space)");
     setup(capture, "Capture the focused trace as a reference (C). Right-click: clear (X)");
-    setup(settings, utf8("Inputs & routing, audio, calibration, limits (⌘,)"));
+    setup(settings, "Inputs & routing, audio, calibration, limits (" + shortcut(",") + ")");
     bars.onClick = [this] { if (onBars) onBars(); };
     delta.onClick = [this] { if (onDelta) onDelta(); };
     freeze.onClick = [this] { if (onFreeze) onFreeze(); };

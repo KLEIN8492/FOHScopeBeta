@@ -15,6 +15,16 @@ inline const juce::Colour bg { 0xff161718 }, panel { 0xff1d1f21 }, well { 0xff11
 // Source literals are UTF-8; juce::String(const char*) assumes ASCII, so wrap any non-ASCII text.
 inline juce::String utf8(const char* s) { return juce::String::fromUTF8(s); }
 
+// On-screen shortcut hint: CMD on macOS, CTRL elsewhere (commandModifier maps the same way).
+inline juce::String shortcut(const juce::String& key)
+{
+#if JUCE_MAC
+    return "CMD+" + key;
+#else
+    return "CTRL+" + key;
+#endif
+}
+
 // dB re FS RMS (internal) → dBFS as shown (AES17: a full-scale sine reads 0 dBFS).
 constexpr float kAes17 = 3.0103f;
 

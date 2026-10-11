@@ -154,7 +154,7 @@ void SpectrumView::paint(juce::Graphics& g)
     if (inputs.inputs.empty()) {
         g.setColour(dim);
         g.setFont(mono(13));
-        g.drawText("NO INPUTS  -  CMD+, TO ADD ONE", plot, juce::Justification::centred);
+        g.drawText("NO INPUTS  -  " + shortcut(",") + " TO ADD ONE", plot, juce::Justification::centred);
     }
 
     if (view.frozen) {

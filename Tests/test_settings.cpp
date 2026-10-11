@@ -75,3 +75,23 @@ TEST_CASE("Settings from empty XML: no inputs")
     CHECK(s.inputs.inputs.empty());
     CHECK(s.inputs.focusedId == 0);
 }
+
+TEST_CASE("Settings: first launch on a fresh account creates the folder, second launch reads it back")
+{
+    const auto dir = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("fohscope-test-" + juce::Uuid().toString());
+    const auto file = dir.getChildFile("FOHScope").getChildFile("settings.xml");
+    REQUIRE_FALSE(dir.exists());
+    fs::Settings s;
+    s.inputs.add({ "ALSA: US-16x08", 3 });
+    REQUIRE(s.saveTo(file));
+    CHECK(file.existsAsFile());
+    const auto back = fs::Settings::loadFrom(file);
+    CHECK(back.inputs == s.inputs);
+    CHECK(fs::Settings::loadFrom(dir.getChildFile("missing.xml")).inputs.inputs.empty());
+    dir.deleteRecursively();
+}
+
+TEST_CASE("Settings folder is named FOHScope on every OS")
+{
+    CHECK(fs::Settings::directory().getFileName() == "FOHScope");
+}
