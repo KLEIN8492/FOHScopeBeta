@@ -1,5 +1,6 @@
 #pragma once
 #include "core/Analyser.h"
+#include "core/InterfaceKey.h"
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <map>
 #include <optional>
@@ -74,8 +75,13 @@ private:
     void setState(const juce::String& name, State, const juce::String& error = {});
     void scheduleRetry(const juce::String& name);
 
+    juce::AudioIODeviceType* typeFor(const juce::String& key, juce::String& deviceName) const;
+
     Analyser& analyser;
-    std::unique_ptr<juce::AudioIODeviceType> type;
+    // Every driver this OS offers: CoreAudio (macOS); ASIO + WASAPI shared (Windows); ALSA + JACK
+    // (Linux). Interfaces are keyed by makeInterfaceKey(type, device).
+    juce::OwnedArray<juce::AudioIODeviceType> types;
+    juce::StringArray typeNames;
 
     mutable std::mutex lock; // everything below up to `open`
     std::vector<std::pair<juce::String, juce::StringArray>> available;

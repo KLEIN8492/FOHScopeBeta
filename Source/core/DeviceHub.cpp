@@ -22,15 +22,32 @@ int DeviceHub::retryDelayMs(int failures)
     return failures <= 0 ? 0 : std::min(30000, 1000 << std::min(failures - 1, 5));
 }
 
-DeviceHub::DeviceHub(Analyser& a)
-    : juce::Thread("FOHScope devices"), analyser(a), type(juce::AudioIODeviceType::createAudioIODeviceType_CoreAudio())
+DeviceHub::DeviceHub(Analyser& a) : juce::Thread("FOHScope devices"), analyser(a)
 {
-    type->addListener(this);
+    // Each factory returns nullptr when its driver is not compiled in (JUCE_ASIO, JUCE_JACK...).
+    for (auto* t : { juce::AudioIODeviceType::createAudioIODeviceType_CoreAudio(),
+                     juce::AudioIODeviceType::createAudioIODeviceType_ASIO(),
+                     juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared),
+                     juce::AudioIODeviceType::createAudioIODeviceType_ALSA(),
+                     juce::AudioIODeviceType::createAudioIODeviceType_JACK() })
+        if (t != nullptr) {
+            t->addListener(this);
+            typeNames.add(t->getTypeName());
+            types.add(t);
+        }
+}
+
+juce::AudioIODeviceType* DeviceHub::typeFor(const juce::String& key, juce::String& deviceName) const
+{
+    const auto k = splitInterfaceKey(key, typeNames);
+    deviceName = k.name;
+    const int i = typeNames.indexOf(k.type);
+    return i >= 0 ? types[i] : nullptr;
 }
 
 DeviceHub::~DeviceHub()
 {
-    type->removeListener(this);
+    for (auto* t : types) t->removeListener(this);
     cancelPendingUpdate();
     signalThreadShouldExit();
     notify();
@@ -160,16 +177,19 @@ void DeviceHub::run()
 
 void DeviceHub::rescan()
 {
-    type->scanForDevices();
     std::vector<std::pair<juce::String, juce::StringArray>> found;
-    for (const auto& name : type->getDeviceNames(true)) {
-        juce::StringArray inputs;
-        if (auto it = open.find(name); it != open.end()) {
-            inputs = it->second.device->getInputChannelNames();
-        } else if (std::unique_ptr<juce::AudioIODevice> probe { type->createDevice({}, name) }) {
-            inputs = probe->getInputChannelNames(); // unopened: only reads the channel names
+    for (auto* type : types) {
+        type->scanForDevices();
+        for (const auto& name : type->getDeviceNames(true)) {
+            const auto key = makeInterfaceKey(type->getTypeName(), name);
+            juce::StringArray inputs;
+            if (auto it = open.find(key); it != open.end()) {
+                inputs = it->second.device->getInputChannelNames();
+            } else if (std::unique_ptr<juce::AudioIODevice> probe { type->createDevice({}, name) }) {
+                inputs = probe->getInputChannelNames(); // unopened: only reads the channel names
+            }
+            if (!inputs.isEmpty()) found.emplace_back(key, inputs);
         }
-        if (!inputs.isEmpty()) found.emplace_back(name, inputs);
     }
     {
         std::lock_guard<std::mutex> g(lock);
@@ -250,7 +270,9 @@ void DeviceHub::watchdog()
 
 bool DeviceHub::openOne(const juce::String& name, const juce::StringArray& inputs, double sr, int block)
 {
-    std::unique_ptr<juce::AudioIODevice> device { type->createDevice({}, name) }; // input only
+    juce::String deviceName;
+    auto* type = typeFor(name, deviceName);
+    std::unique_ptr<juce::AudioIODevice> device { type ? type->createDevice({}, deviceName) : nullptr }; // input only
     if (device == nullptr) {
         setState(name, State::error, "cannot create device");
         return false;
