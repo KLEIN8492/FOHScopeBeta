@@ -12,8 +12,11 @@ std::set<juce::String> wantedDevices(const InputList& l, bool routingVisible, co
     std::set<juce::String> w;
     for (const auto& in : l.inputs)
         if (!in.muted && in.port.valid()) w.insert(in.port.device);
+    // ASIO drivers are only opened when an input is patched to them: opening one loads the
+    // hardware driver, can re-clock it under another app, or (ASIO4ALL) grab every WDM device.
     if (routingVisible)
-        for (const auto& n : available) w.insert(n);
+        for (const auto& n : available)
+            if (!n.startsWith("ASIO: ")) w.insert(n);
     return w;
 }
 
@@ -45,13 +48,43 @@ juce::AudioIODeviceType* DeviceHub::typeFor(const juce::String& key, juce::Strin
     return i >= 0 ? types[i] : nullptr;
 }
 
+// Threading. macOS / Linux: the hub runs on its own thread, so a slow driver never blocks the
+// window. Windows: on the message thread (a Timer), like LiveRack. JUCE's WASAPI and ASIO code
+// touches device objects from the message thread (device-change and driver-reset callbacks) and
+// needs COM, which JUCE initialises on the message thread only.
+#if JUCE_WINDOWS
+constexpr bool kHubOnMessageThread = true;
+#else
+constexpr bool kHubOnMessageThread = false;
+#endif
+
+void DeviceHub::start()
+{
+    if (kHubOnMessageThread) startTimer(1);
+    else startThread();
+}
+
+void DeviceHub::kick()
+{
+    if (kHubOnMessageThread) startTimer(1);
+    else notify();
+}
+
+void DeviceHub::timerCallback()
+{
+    startTimer(kTickMs);
+    tick();
+}
+
 DeviceHub::~DeviceHub()
 {
     for (auto* t : types) t->removeListener(this);
     cancelPendingUpdate();
+    stopTimer();
     signalThreadShouldExit();
     notify();
-    stopThread(15000); // run() closes every interface on its way out
+    stopThread(15000);
+    while (!open.empty()) closeOne(open.begin()->first);
 }
 
 // ---------------------------------------------------------------- message thread
@@ -65,7 +98,7 @@ void DeviceHub::setFormat(double sr, int block)
         buffer = block;
         ++formatGeneration;
     }
-    notify();
+    kick();
 }
 
 void DeviceHub::setWanted(const std::set<juce::String>& w)
@@ -75,7 +108,7 @@ void DeviceHub::setWanted(const std::set<juce::String>& w)
         if (w == wanted) return;
         wanted = w;
     }
-    notify();
+    kick();
 }
 
 void DeviceHub::setOpeningAllowed(bool allowed)
@@ -84,7 +117,7 @@ void DeviceHub::setOpeningAllowed(bool allowed)
         std::lock_guard<std::mutex> g(lock);
         openingAllowed = allowed;
     }
-    notify();
+    kick();
 }
 
 std::vector<DeviceHub::Info> DeviceHub::snapshot() const
@@ -145,7 +178,7 @@ void DeviceHub::audioDeviceListChanged()
         std::lock_guard<std::mutex> g(lock);
         rescanNeeded = true;
     }
-    notify();
+    kick();
 }
 
 void DeviceHub::handleAsyncUpdate()
@@ -158,21 +191,26 @@ void DeviceHub::handleAsyncUpdate()
 void DeviceHub::run()
 {
     while (!threadShouldExit()) {
-        bool scan;
-        {
-            std::lock_guard<std::mutex> g(lock);
-            scan = rescanNeeded;
-            rescanNeeded = false;
-        }
-        if (scan) {
-            retries.clear(); // interfaces came or went: try them afresh
-            rescan();
-        }
-        reconcile();
-        watchdog();
+        tick();
         wait(kTickMs);
     }
     while (!open.empty()) closeOne(open.begin()->first);
+}
+
+void DeviceHub::tick()
+{
+    bool scan;
+    {
+        std::lock_guard<std::mutex> g(lock);
+        scan = rescanNeeded;
+        rescanNeeded = false;
+    }
+    if (scan) {
+        retries.clear(); // interfaces came or went: try them afresh
+        rescan();
+    }
+    reconcile();
+    watchdog();
 }
 
 void DeviceHub::rescan()
@@ -185,9 +223,12 @@ void DeviceHub::rescan()
             juce::StringArray inputs;
             if (auto it = open.find(key); it != open.end()) {
                 inputs = it->second.device->getInputChannelNames();
+            } else if (auto known = probed.find(key); known != probed.end()) {
+                inputs = known->second; // probed before: creating an ASIO device loads its driver
             } else if (std::unique_ptr<juce::AudioIODevice> probe { type->createDevice({}, name) }) {
                 inputs = probe->getInputChannelNames(); // unopened: only reads the channel names
             }
+            probed[key] = inputs;
             if (!inputs.isEmpty()) found.emplace_back(key, inputs);
         }
     }

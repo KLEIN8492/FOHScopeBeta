@@ -31,6 +31,7 @@ WizardStyle=modern
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"
 Source: "..\..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"
+Source: "..\..\Resources\fonts\OFL.txt"; DestDir: "{app}"
 
 [Icons]
 Name: "{group}\FOHScope"; Filename: "{app}\FOHScope.exe"

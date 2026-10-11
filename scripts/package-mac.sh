@@ -17,7 +17,9 @@ STAGE=$(mktemp -d)
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cp "packaging/READ ME FIRST (Mac).txt" "$STAGE/READ ME FIRST.txt"
-cp LICENSE "$STAGE/LICENSE.txt" 2>/dev/null || true
+cp LICENSE "$STAGE/LICENSE.txt"
+cp THIRD_PARTY_NOTICES.md "$STAGE/THIRD_PARTY_NOTICES.md"
+cp Resources/fonts/OFL.txt "$STAGE/OFL.txt"
 
 mkdir -p dist
 OUT="dist/FOHScope-$VER-mac-universal.dmg"

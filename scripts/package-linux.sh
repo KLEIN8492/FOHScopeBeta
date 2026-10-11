@@ -14,6 +14,7 @@ install -Dm644 packaging/linux/fohscope.desktop "$APPDIR/usr/share/applications/
 install -Dm644 Resources/fohscope.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/fohscope.png"
 install -Dm644 LICENSE "$APPDIR/usr/share/doc/fohscope/LICENSE"
 install -Dm644 THIRD_PARTY_NOTICES.md "$APPDIR/usr/share/doc/fohscope/THIRD_PARTY_NOTICES.md"
+install -Dm644 Resources/fonts/OFL.txt "$APPDIR/usr/share/doc/fohscope/OFL.txt"
 
 mkdir -p dist
 # APPIMAGE_EXTRACT_AND_RUN: no FUSE needed on CI runners. ALSA / JACK client libraries are

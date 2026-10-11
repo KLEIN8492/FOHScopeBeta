@@ -17,7 +17,7 @@ std::set<juce::String> wantedDevices(const InputList&, bool routingVisible, cons
 // started on its Analyser sink. All opening, closing and probing runs on the hub's own thread:
 // a slow driver never blocks the window. A watchdog reopens interfaces that stop delivering or
 // come back after being unplugged, with back-off.
-class DeviceHub : private juce::Thread, private juce::AudioIODeviceType::Listener, private juce::AsyncUpdater
+class DeviceHub : private juce::Thread, private juce::Timer, private juce::AudioIODeviceType::Listener, private juce::AsyncUpdater
 {
 public:
     enum class State { closed, opening, open, error, missing };
@@ -34,7 +34,7 @@ public:
     explicit DeviceHub(Analyser&);
     ~DeviceHub() override;
 
-    void start() { startThread(); }
+    void start();
     void setFormat(double sampleRate, int bufferSize); // reopens what is open
     void setWanted(const std::set<juce::String>&);
     void setOpeningAllowed(bool); // false until microphone access is settled
@@ -64,6 +64,9 @@ private:
     };
 
     void run() override;
+    void timerCallback() override;
+    void tick();  // one pass: rescan if asked, reconcile, watchdog
+    void kick();  // run a tick soon (after a change)
     void audioDeviceListChanged() override;
     void handleAsyncUpdate() override;
 
@@ -96,6 +99,7 @@ private:
     std::map<juce::String, Open> open;
     std::map<juce::String, Retry> retries;
     uint64_t openFormatGeneration = 0;
+    std::map<juce::String, juce::StringArray> probed; // channel names seen per key: each driver is probed once
 };
 
 } // namespace fs

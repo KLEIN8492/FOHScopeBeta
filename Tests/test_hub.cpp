@@ -29,3 +29,15 @@ TEST_CASE("Hub: reopen back-off 1, 2, 4, 8, 16, 30 s")
     CHECK(fs::DeviceHub::retryDelayMs(6) == 30000);
     CHECK(fs::DeviceHub::retryDelayMs(20) == 30000);
 }
+
+TEST_CASE("Hub: the routing page never auto-opens ASIO drivers (each one loads the hardware driver)")
+{
+    fs::InputList l;
+    l.add({ "ASIO: Focusrite USB ASIO", 0 }); // patched: wanted
+    const juce::StringArray available { "ASIO: Focusrite USB ASIO", "ASIO: ASIO4ALL v2", "Windows Audio: Speakers", "ALSA: US-16x08" };
+    const auto w = fs::wantedDevices(l, true, available);
+    CHECK(w.count("ASIO: Focusrite USB ASIO") == 1);
+    CHECK(w.count("ASIO: ASIO4ALL v2") == 0);
+    CHECK(w.count("Windows Audio: Speakers") == 1);
+    CHECK(w.count("ALSA: US-16x08") == 1);
+}

@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
 project(FOHScope VERSION 0.2.0 LANGUAGES C CXX)
 
+# Windows: link the C++ runtime statically, so FOHScope.exe runs on a fresh Windows without the
+# VC++ redistributable. Set before any target (JUCE / Catch2 included).
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT CMAKE_BUILD_TYPE)
@@ -32,6 +36,8 @@ target_compile_definitions(fs_core PUBLIC
   JUCE_WEB_BROWSER=0
   JUCE_USE_CURL=0
   JUCE_STANDALONE_APPLICATION=1
+  JUCE_USE_FLAC=0
+  JUCE_USE_OGGVORBIS=0
   JUCE_APPLICATION_NAME_STRING="FOHScope"
   JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
 # Audio drivers per OS (DeviceHub opens every type that is compiled in).
@@ -46,7 +52,9 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 add_library(fs_warning_tweaks INTERFACE)
-target_compile_options(fs_warning_tweaks INTERFACE -Wno-float-equal)
+if(NOT MSVC)
+  target_compile_options(fs_warning_tweaks INTERFACE -Wno-float-equal) # GCC / Clang only
+endif()
 # Interface font for Windows / Linux (macOS uses Menlo): JetBrains Mono, SIL OFL 1.1.
 juce_add_binary_data(fs_fonts NAMESPACE FontData HEADER_NAME FontData.h SOURCES
   Resources/fonts/JetBrainsMono-Regular.ttf

@@ -17,6 +17,7 @@ New-Item -ItemType Directory -Path "$stage/FOHScope" | Out-Null
 Copy-Item $exe "$stage/FOHScope/"
 Copy-Item LICENSE "$stage/FOHScope/LICENSE.txt"
 Copy-Item THIRD_PARTY_NOTICES.md "$stage/FOHScope/"
+Copy-Item Resources/fonts/OFL.txt "$stage/FOHScope/"
 Compress-Archive -Path "$stage/FOHScope" -DestinationPath "dist/FOHScope-$ver-windows-x64.zip" -Force
 
 # Installer.

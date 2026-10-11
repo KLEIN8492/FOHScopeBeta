@@ -51,6 +51,7 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -PassThru build\FOHScope_artefacts\Release\FOHScope.exe -ArgumentList '--smoke-test'
+          $null = $p.Handle # keeps the handle so ExitCode is still readable after the process ends
           if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "FOHScope hung" }
           if ($p.ExitCode -ne 0) { throw "FOHScope exited with $($p.ExitCode)" }
       - name: Inno Setup
