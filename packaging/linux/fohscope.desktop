@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=FOHScope
+Comment=Real-time FOH spectrum analyser, spectrograph, feedback finder and SPL meter
+Exec=FOHScope
+Icon=fohscope
+Categories=AudioVideo;Audio;
+Terminal=false

@@ -3,6 +3,7 @@
 Same family as LiveRack / VenueTuner: flat dark macOS tile, faint grid, no gradients, no glow.
 1/3-octave RTA bars in the VenueTuner teal, one narrow peak in red with a feedback marker
 above it (what is ringing), and a spectrograph strip along the bottom.
+Writes AppIcon.png (1024), AppIcon.ico (Windows) and fohscope.png (256, Linux).
 Run: python3 Resources/make_icon.py
 """
 import math
@@ -86,7 +87,11 @@ def main():
     rect(d, (left, sy0, right, sy1), outline=TILE_EDGE, width=px(3))
 
     out = Path(__file__).with_name("AppIcon.png")
-    icon.resize((1024, 1024), Image.LANCZOS).save(out)
+    full = icon.resize((1024, 1024), Image.LANCZOS)
+    full.save(out)
+    # Windows installer icon and the Linux AppImage / desktop icon.
+    full.save(out.with_name("AppIcon.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    full.resize((256, 256), Image.LANCZOS).save(out.with_name("fohscope.png"))
     print(out)
 
 

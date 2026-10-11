@@ -1,0 +1,11 @@
+FOHScope for macOS (Apple Silicon and Intel, macOS 13 or later)
+
+1. Drag FOHScope onto Applications.
+2. First launch: macOS blocks apps that are not notarised. Open FOHScope once, then go to
+   System Settings > Privacy & Security, scroll down to "FOHScope was blocked" and click
+   Open Anyway. (macOS 13-14: right-click FOHScope > Open.)
+   Or in Terminal:  xattr -dr com.apple.quarantine /Applications/FOHScope.app
+3. Allow microphone access when asked, or every input reads silence.
+4. CMD+, opens Setup: add an input, pick its interface and channel.
+
+Free software, AGPLv3. Source and updates: https://github.com/KLEIN8492/FOHScopeBeta
