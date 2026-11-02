@@ -68,6 +68,7 @@ private:
     void run() override;
     void applyControls(const Controls&);
     void restartDevice(const juce::String& device, double rate);
+    double deltaSharedRate() const;
     void drain(DeviceSink&, SinkState&, size_t& advanced);
     void publish(const Controls&, double now);
 

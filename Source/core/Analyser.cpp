@@ -134,9 +134,23 @@ void Analyser::restartDevice(const juce::String& device, double rate)
         splRate = rate;
     }
     if (deltaA.valid() && deltaB.valid() && (deltaA.device == device || deltaB.device == device)) {
-        delta.prepare(rate);
-        deltaRate = rate;
+        deltaRate = deltaSharedRate(); // 0 (off) unless both streams run at the same rate
+        if (deltaRate > 0) delta.prepare(deltaRate);
     }
+}
+
+// The rate both delta streams run at, or 0 when the delta cannot be computed: an interface not
+// running yet, or A and B on interfaces at different rates. DeviceHub opens every interface at
+// one shared rate, but nothing here may assume it (a driver can be forced to another rate):
+// correlating 48 k samples against 44.1 k ones would give a wrong delay and a wrong trace.
+double Analyser::deltaSharedRate() const
+{
+    if (!deltaA.valid() || !deltaB.valid()) return 0;
+    const auto a = findSink(deltaA.device);
+    const auto b = deltaB.device == deltaA.device ? a : findSink(deltaB.device);
+    if (!a || !b) return 0;
+    const double ra = a->sampleRate(), rb = b->sampleRate();
+    return ra > 0 && ra == rb ? ra : 0;
 }
 
 void Analyser::drain(DeviceSink& s, SinkState& st, size_t& advanced)
@@ -156,7 +170,14 @@ void Analyser::drain(DeviceSink& s, SinkState& st, size_t& advanced)
         if (d->port.device == name && d->rate != rate) { d->spectrum.prepare(rate); d->rate = rate; }
     if (splPort.device == name && splRate != rate) { spl.prepare(rate); splRate = rate; }
     const bool deltaHere = deltaA.valid() && deltaB.valid() && (deltaA.device == name || deltaB.device == name);
-    if (deltaHere && deltaRate == 0) { delta.prepare(rate); deltaRate = rate; }
+    if (deltaHere) {
+        // Re-checked every drain: the other interface may have started, stopped matching (it
+        // restarted at another rate) or come back to the shared rate.
+        if (const double r = deltaSharedRate(); r != deltaRate) {
+            if (r > 0) delta.prepare(r);
+            deltaRate = r;
+        }
+    }
 
     const int nCh = int(s.fifos.size());
     std::vector<bool> used(size_t(nCh), false);

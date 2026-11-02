@@ -35,6 +35,11 @@ public:
 
 private:
     friend class Analyser;
+    // Invariant: prepare() — the only place `fifos`, `activeToDevice` and `meters` are replaced —
+    // runs from audioDeviceAboutToStart, i.e. on the device's thread before its callback starts
+    // (and from tests, with no device). The callback reads them without the lock, which is only
+    // safe because the driver never runs the callback while audioDeviceAboutToStart is in
+    // progress. Never call prepare() from anywhere else while a device may be running.
     void prepare(double sr, int channels, std::vector<int> activeToDevice);
 
     const juce::String deviceName;

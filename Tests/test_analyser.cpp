@@ -224,3 +224,41 @@ TEST_CASE("Analyser: per-channel peak meters on each interface, held until read"
     CHECK(a.findSink("Meters") == dev);
     CHECK(a.findSink("Other") == nullptr);
 }
+
+TEST_CASE("Analyser: no delta across interfaces running at different rates, and it recovers when they match")
+{
+    // DeviceHub opens everything at one shared rate, but the analyser must not rely on that:
+    // correlating 48 k against 44.1 k samples would give a wrong delay and a wrong trace.
+    fs::Analyser a;
+    auto mic = a.sink("Mic box"), desk = a.sink("Console");
+    mic->prepareForTest(48000, 1);
+    desk->prepareForTest(44100, 1);
+    fs::InputList l;
+    l.add({ "Mic box", 0 });
+    l.add({ "Console", 0 });
+    l.deltaA = l.inputs[0].id;
+    l.deltaB = l.inputs[1].id;
+    a.setInputs(l);
+    auto noise = fs::test::pink(14, 48000);
+    std::vector<float> x(256);
+    size_t t = 0;
+    auto run = [&](double seconds) {
+        for (size_t b = 0; b < size_t(seconds * 48000 / 256); ++b, t += 256) {
+            for (size_t i = 0; i < 256; ++i) x[i] = t + i >= 960 ? 0.5f * noise[t + i - 960] : 0.0f;
+            const float* pa[1] = { x.data() };
+            const float* pb[1] = { noise.data() + t };
+            mic->pushTestBlock(pa, 1, 256);
+            desk->pushTestBlock(pb, 1, 256);
+            if (b % 2 == 0) a.tick();
+        }
+        a.tick();
+    };
+    run(6.5);
+    CHECK_FALSE(a.latest().deltaValid);
+
+    desk->prepareForTest(48000, 1); // the console interface restarts at the shared rate
+    run(6.5);
+    const auto& f = a.latest();
+    REQUIRE(f.deltaValid);
+    CHECK_THAT(f.deltaMs, WithinAbs(20.0, 5.4));
+}
