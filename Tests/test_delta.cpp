@@ -73,3 +73,30 @@ TEST_CASE("Delta: A and B pushed separately (two interfaces, 256-sample buffers)
     // within one interface (process()) the delay is sample-exact.
     CHECK_THAT(d.delayMs(), WithinAbs(20.0, 5.4));
 }
+
+TEST_CASE("Delta: finds the delay in both directions (A after B, and A before B)")
+{
+    // Positive: A (mic) arrives after B (console). Negative: the patch is the other way round,
+    // A = console, B = mic, so A arrives first. Both must be found and reported with their sign,
+    // and the trace must line the two up (a pure delay + gain adds no spectral shape).
+    constexpr double sr = 48000;
+    constexpr int d = 1200; // 25 ms
+    auto src = fs::test::pink(8, sr);
+    std::vector<float> late(src.size());
+    for (size_t i = 0; i < late.size(); ++i) late[i] = i >= d ? 0.5f * src[i - d] : 0.0f;
+
+    for (bool aIsLate : { true, false }) {
+        INFO((aIsLate ? "A = B delayed by 25 ms" : "B = A delayed by 25 ms"));
+        const auto& a = aIsLate ? late : src;
+        const auto& b = aIsLate ? src : late;
+        fs::DeltaTrace t;
+        t.prepare(sr);
+        for (size_t i = 0; i + 480 <= a.size(); i += 480) t.process(a.data() + i, b.data() + i, 480);
+        REQUIRE(t.valid());
+        CHECK_THAT(t.delayMs(), WithinAbs(aIsLate ? 25.0 : -25.0, 0.1));
+
+        std::vector<float> line(fs::grid::kPoints);
+        t.line(line.data());
+        for (double hz = 300; hz <= 8000; hz *= 1.25) CHECK_THAT(line[size_t(std::lround(fs::grid::indexOf(hz)))], WithinAbs(0.0, 1.0));
+    }
+}

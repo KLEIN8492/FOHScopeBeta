@@ -29,7 +29,8 @@ void DeltaTrace::reset()
     std::fill(ringB.begin(), ringB.end(), 0.0f);
     writeA = writeB = filledA = filledB = sinceEstimate = 0;
     history.clear();
-    delay = -1;
+    delay = 0;
+    hasDelay = false;
     specA.prepare(sr);
     specB.prepare(sr);
 }
@@ -42,29 +43,40 @@ void DeltaTrace::process(const float* a, const float* b, int n)
 }
 
 // A and B may come from different interfaces, drained at different moments: each keeps its own
-// ring and write position. B reaches its spectrum delayed by the current estimate.
+// ring and write position. Whichever arrives first is held back by |delay| before its spectrum
+// (B when delay > 0, A when delay < 0): a real-time stream can only be delayed, never advanced.
 void DeltaTrace::pushA(const float* a, int n)
 {
-    for (int i = 0; i < n; ++i) {
-        ringA[writeA] = a[i];
-        writeA = (writeA + 1) & mask;
-    }
+    for (int i = 0; i < n; ++i) ringA[(writeA + size_t(i)) & mask] = a[i];
+    const size_t d = hasDelay && delay < 0 ? size_t(-delay) : 0;
+    specA.process(heldBack(ringA, writeA, filledA, a, n, d), n);
+    writeA = (writeA + size_t(n)) & mask;
     filledA = std::min(filledA + size_t(n), ringA.size());
     sinceEstimate += size_t(n);
-    specA.process(a, n);
 }
 
 void DeltaTrace::pushB(const float* b, int n)
 {
-    delayedB.resize(size_t(n));
-    const size_t d = size_t(std::max(delay, 0));
-    for (int i = 0; i < n; ++i) {
-        ringB[writeB] = b[i];
-        delayedB[size_t(i)] = ringB[(writeB - d) & mask];
-        writeB = (writeB + 1) & mask;
-    }
+    for (int i = 0; i < n; ++i) ringB[(writeB + size_t(i)) & mask] = b[i];
+    const size_t d = hasDelay && delay > 0 ? size_t(delay) : 0;
+    specB.process(heldBack(ringB, writeB, filledB, b, n, d), n);
+    writeB = (writeB + size_t(n)) & mask;
     filledB = std::min(filledB + size_t(n), ringB.size());
-    specB.process(delayedB.data(), n);
+}
+
+// Sample i of the block just written at `write` is ring[write + i]; held back by d it becomes
+// ring[write + i − d]. That slot is valid only if it was written since reset: with `filled`
+// samples written before this block, i − d must be ≥ −filled. Anything older reads 0.
+const float* DeltaTrace::heldBack(const std::vector<float>& ring, size_t write, size_t filled, const float* x, int n, size_t d)
+{
+    if (d == 0) return x;
+    d = std::min(d, size_t(maxLag)); // never more than the ring keeps behind the write position
+    held.resize(size_t(n));
+    for (int i = 0; i < n; ++i) {
+        const long back = long(i) - long(d);
+        held[size_t(i)] = back >= -long(filled) ? ring[(write + size_t(i) - d) & mask] : 0.0f;
+    }
+    return held.data();
 }
 
 // Call once both streams are pushed up to the same moment (end of an analysis tick).
@@ -78,8 +90,9 @@ void DeltaTrace::maybeEstimate()
 
 void DeltaTrace::estimateDelay()
 {
-    // The newest block of A against the same block of B: if A = B delayed by D,
-    // the PHAT-weighted cross-correlation peaks at lag D.
+    // The newest block of A against the same block of B: if A = B delayed by D, the PHAT-weighted
+    // cross-correlation peaks at lag D. Negative lags (A ahead of B) sit at the top of the
+    // zero-padded buffer, at index m − |D|: the padding keeps both halves free of wrap-around.
     const size_t m = fa.size();
     std::fill(fa.begin(), fa.end(), juce::dsp::Complex<float> {});
     std::fill(fb.begin(), fb.end(), juce::dsp::Complex<float> {});
@@ -100,12 +113,12 @@ void DeltaTrace::estimateDelay()
 
     int best = 0;
     float peak = 0, sum = 0;
-    for (int lag = 0; lag <= maxLag; ++lag) {
-        const float v = prod[size_t(lag)].real();
+    for (int lag = -maxLag; lag <= maxLag; ++lag) {
+        const float v = prod[lag >= 0 ? size_t(lag) : m - size_t(-lag)].real();
         sum += std::abs(v);
         if (v > peak) { peak = v; best = lag; }
     }
-    const float mean = sum / float(maxLag + 1);
+    const float mean = sum / float(2 * maxLag + 1);
     if (peak < 8.0f * mean) return; // no clear arrival (silence, unrelated signals)
 
     history.push_back(best);
@@ -113,6 +126,7 @@ void DeltaTrace::estimateDelay()
     auto sorted = history;
     std::sort(sorted.begin(), sorted.end());
     delay = sorted[sorted.size() / 2];
+    hasDelay = true;
 }
 
 void DeltaTrace::line(float* out) const
