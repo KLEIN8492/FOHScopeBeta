@@ -1,4 +1,5 @@
 #include "dsp/MtwSpectrum.h"
+#include <algorithm>
 #include <cmath>
 
 namespace fs {
@@ -129,11 +130,21 @@ void MtwSpectrum::line(Averaging a, float* out) const
     for (size_t i = 0; i < lineTaps.size(); ++i) out[i] = float(evaluate(lineTaps[i], a));
 }
 
+int MtwSpectrum::supportedResolution(int bandsPerOctave)
+{
+    if (std::find(std::begin(kResolutions), std::end(kResolutions), bandsPerOctave) != std::end(kResolutions)) return bandsPerOctave;
+    jassertfalse; // the UI and settings only offer kResolutions
+    if (bandsPerOctave <= kResolutions[0]) return kResolutions[0];
+    int best = kResolutions[0];
+    for (int r : kResolutions)
+        if (std::abs(std::log2(double(r) / bandsPerOctave)) < std::abs(std::log2(double(best) / bandsPerOctave))) best = r;
+    return best;
+}
+
 std::vector<Band> MtwSpectrum::bands(Averaging a, int bandsPerOctave) const
 {
-    size_t r = 1;
-    for (size_t i = 0; i < std::size(kResolutions); ++i)
-        if (kResolutions[i] == bandsPerOctave) r = i;
+    const int res = supportedResolution(bandsPerOctave);
+    const size_t r = size_t(std::find(std::begin(kResolutions), std::end(kResolutions), res) - std::begin(kResolutions));
     std::vector<Band> out;
     out.reserve(bandTaps[r].size());
     for (const auto& [fc, in] : bandTaps[r]) out.push_back({ fc, float(evaluate(in, a)) });

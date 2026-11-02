@@ -92,3 +92,30 @@ TEST_CASE("MTW: silence reads the floor, peak hold keeps the maximum until reset
     s.hold(hold.data());
     CHECK(hold[k] <= -150);
 }
+
+namespace {
+// Bands per octave actually delivered: from the spacing of two neighbouring centre frequencies.
+double bandsPerOctaveOf(const std::vector<fs::Band>& b)
+{
+    REQUIRE(b.size() > 2);
+    return 1.0 / std::log2(double(b[2].fc) / double(b[1].fc));
+}
+}
+
+TEST_CASE("MTW: band resolution — supported values are exact, others clamp to the nearest supported")
+{
+    fs::MtwSpectrum s;
+    s.prepare(48000);
+    for (int r : fs::MtwSpectrum::kResolutions) {
+        INFO("1/" << r);
+        CHECK(fs::MtwSpectrum::supportedResolution(r) == r);
+        CHECK_THAT(bandsPerOctaveOf(s.bands(Averaging::Slow, r)), WithinAbs(r, 1e-3));
+    }
+    // Not silently 1/3 any more: the nearest supported resolution (on a log scale).
+    CHECK(fs::MtwSpectrum::supportedResolution(4) == 3);
+    CHECK(fs::MtwSpectrum::supportedResolution(9) == 12);
+    CHECK(fs::MtwSpectrum::supportedResolution(48) == 24);
+    CHECK(fs::MtwSpectrum::supportedResolution(0) == 1);
+    CHECK(fs::MtwSpectrum::supportedResolution(-6) == 1);
+    CHECK_THAT(bandsPerOctaveOf(s.bands(Averaging::Slow, 9)), WithinAbs(12, 1e-3));
+}

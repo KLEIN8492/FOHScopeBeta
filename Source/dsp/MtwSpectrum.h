@@ -37,6 +37,10 @@ public:
     void line(Averaging, float* out) const; // grid::kPoints values
     std::vector<Band> bands(Averaging, int bandsPerOctave) const;
 
+    // One of kResolutions. Anything else is a caller bug (asserts in debug) and is clamped to the
+    // nearest supported resolution on a log scale, so 1/9 shows 1/12 bands, never silently 1/3.
+    static int supportedResolution(int bandsPerOctave);
+
     void updateHold(const float* line);
     void hold(float* out) const;
 
