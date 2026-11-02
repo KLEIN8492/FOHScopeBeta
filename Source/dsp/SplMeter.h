@@ -20,6 +20,10 @@ public:
         std::array<double, 3> leq { -200, -200, -200 };      // since resetLeq()
         std::array<double, 3> maxFast { -200, -200, -200 };  // max of the Fast level since resetLeq()
         std::array<std::array<double, 3>, kWindows> leqWindow {}; // sliding windows (kWindowSeconds)
+        // Seconds of audio each sliding window actually averaged. Below kWindowSeconds the window
+        // is still filling (e.g. a 15 min Leq after 2 s of audio): show it as warming up and keep
+        // it out of the noise-limit log until it is complete.
+        std::array<double, kWindows> leqWindowSeconds {};
         double peakZ = -200;   // since last reading()
         double cPeak = -200;   // LCpeak: max |C-weighted| since resetLeq()
         double leqSeconds = 0;

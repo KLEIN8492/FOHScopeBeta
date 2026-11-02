@@ -71,3 +71,30 @@ TEST_CASE("Embedded JetBrains Mono (Windows / Linux interface font) loads from t
     CHECK(fs::theme::mono(11).getTypefacePtr() == fs::theme::embeddedMono(false));
 #endif
 }
+
+TEST_CASE("SPL meter: each sliding Leq reports how many seconds it actually averaged")
+{
+    // A "15 min Leq" built from 2.5 s of audio must say so: the UI shows it as warming up and the
+    // noise-limit log must not treat it as a 15-minute figure.
+    constexpr double sr = 48000;
+    fs::SplMeter m;
+    m.prepare(sr);
+    auto x = fs::test::sine(1000, 0.1, 20.0, sr);
+    m.process(x.data(), int(2.5 * sr));
+    auto r = m.reading();
+    // Windows 1 s / 10 s / 1 / 5 / 15 min: the last T−1 whole seconds + the current partial one.
+    const double early[] = { 0.5, 2.5, 2.5, 2.5, 2.5 };
+    for (int w = 0; w < fs::SplMeter::kWindows; ++w) {
+        INFO("window " << fs::SplMeter::kWindowSeconds[w] << " s");
+        CHECK_THAT(r.leqWindowSeconds[size_t(w)], WithinAbs(early[w], 1e-9));
+    }
+    m.process(x.data() + int(2.5 * sr), int(17.5 * sr)); // 20 s in, on a second boundary
+    r = m.reading();
+    const double later[] = { 1, 10, 20, 20, 20 };
+    for (int w = 0; w < fs::SplMeter::kWindows; ++w) {
+        INFO("window " << fs::SplMeter::kWindowSeconds[w] << " s");
+        CHECK_THAT(r.leqWindowSeconds[size_t(w)], WithinAbs(later[w], 1e-9));
+    }
+    // The levels themselves are unchanged: a steady sine reads the same in every window.
+    for (int w = 0; w < fs::SplMeter::kWindows; ++w) CHECK_THAT(r.leqWindow[size_t(w)][0], WithinAbs(-23.01, 0.05));
+}

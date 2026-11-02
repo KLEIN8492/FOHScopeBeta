@@ -111,6 +111,7 @@ SplMeter::Reading SplMeter::reading()
                 samples += sr;
             }
             r.leqWindow[size_t(w)][k] = samples > 0 ? db(energy / samples) : -200.0;
+            r.leqWindowSeconds[size_t(w)] = samples / sr; // same for every weighting
         }
     }
     peak = 0;
