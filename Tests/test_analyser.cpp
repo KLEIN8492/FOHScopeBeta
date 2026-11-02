@@ -78,6 +78,13 @@ struct Rig
 };
 
 float sine(double hz, size_t i) { return float(0.1 * std::sin(2 * M_PI * hz * double(i) / 48000.0)); }
+
+fs::Frame latestOf(fs::Analyser& a)
+{
+    fs::Frame f;
+    a.latest(f);
+    return f;
+}
 }
 
 TEST_CASE("Analyser: one trace per input, spectrogram columns, SPL only with a mic")
@@ -92,7 +99,7 @@ TEST_CASE("Analyser: one trace per input, spectrogram columns, SPL only with a m
     auto tone = [&](int c, size_t i) { return c == 0 ? sine(1000, i) : 0.0f; };
     r.feed(2.0, tone, t);
 
-    const auto& f = r.a.latest();
+    const auto f = latestOf(r.a);
     REQUIRE(f.traces.size() == 2);
     CHECK(f.traces[0].live);
     CHECK_FALSE(f.splValid);
@@ -109,7 +116,7 @@ TEST_CASE("Analyser: one trace per input, spectrogram columns, SPL only with a m
     l.add({ "Test", 1 });
     r.a.setInputs(l);
     r.feed(1.0, tone, t);
-    const auto& g = r.a.latest();
+    const auto g = latestOf(r.a);
     REQUIRE(g.traces.size() == 3);
     CHECK(g.traces[0].line[k] > -40);
     CHECK(g.splValid);
@@ -128,7 +135,7 @@ TEST_CASE("Analyser: delta between two inputs of one interface is sample-exact")
     auto noise = fs::test::pink(7, 48000);
     size_t t = 0;
     r.feed(6.5, [&](int c, size_t i) { return c == 1 ? noise[i] : (i >= 960 ? 0.5f * noise[i - 960] : 0.0f); }, t);
-    const auto& f = r.a.latest();
+    const auto f = latestOf(r.a);
     REQUIRE(f.deltaValid);
     CHECK_THAT(f.deltaMs, WithinAbs(20.0, 0.1));
 }
@@ -159,7 +166,7 @@ TEST_CASE("Analyser: two interfaces at once, each input on its own; a stalled on
         a.tick();
     };
     run(2.0, true);
-    const auto& f = a.latest();
+    const auto f = latestOf(a);
     REQUIRE(f.traces.size() == 3);
     const size_t k1 = size_t(std::lround(fs::grid::indexOf(1000))), k4 = size_t(std::lround(fs::grid::indexOf(4000)));
     CHECK(f.traces[0].line[k1] > f.traces[0].line[k4] + 30);
@@ -170,7 +177,7 @@ TEST_CASE("Analyser: two interfaces at once, each input on its own; a stalled on
     const auto before = f.seq;
     devB->stopForTest();
     run(1.0, false); // B stalls: A keeps being analysed and published
-    const auto& g = a.latest();
+    const auto g = latestOf(a);
     CHECK(g.seq > before + 20);
     CHECK(g.traces[0].line[k1] > -40);
     CHECK_FALSE(g.traces[1].live);
@@ -199,7 +206,7 @@ TEST_CASE("Analyser: delta across two interfaces")
         if (b % 2 == 0) a.tick();
     }
     a.tick();
-    const auto& f = a.latest();
+    const auto f = latestOf(a);
     REQUIRE(f.deltaValid);
     CHECK_THAT(f.deltaMs, WithinAbs(20.0, 5.4)); // within one buffer across interfaces
 }
@@ -254,11 +261,38 @@ TEST_CASE("Analyser: no delta across interfaces running at different rates, and 
         a.tick();
     };
     run(6.5);
-    CHECK_FALSE(a.latest().deltaValid);
+    CHECK_FALSE(latestOf(a).deltaValid);
 
     desk->prepareForTest(48000, 1); // the console interface restarts at the shared rate
     run(6.5);
-    const auto& f = a.latest();
+    const auto f = latestOf(a);
     REQUIRE(f.deltaValid);
     CHECK_THAT(f.deltaMs, WithinAbs(20.0, 5.4));
+}
+
+TEST_CASE("Analyser: a frame taken by the UI stays intact while the analyser keeps publishing")
+{
+    Rig r(1);
+    fs::InputList l;
+    l.add({ "Test", 0 });
+    r.a.setInputs(l);
+    size_t t = 0;
+    auto tone = [&](int, size_t i) { return sine(1000, i); };
+    r.feed(1.0, tone, t);
+
+    fs::Frame held; // what a UI callback holds while it draws
+    r.a.latest(held);
+    const auto seq = held.seq;
+    REQUIRE(seq > 0);
+    REQUIRE_FALSE(held.traces.empty());
+    const auto line = held.traces[0].line;
+    // Elsewhere on the message thread something reads the latest frame again (a key handler, the
+    // settings window), and the analyser publishes on.
+    r.feed(0.2, tone, t);
+    fs::Frame other;
+    r.a.latest(other);
+    r.feed(0.5, tone, t);
+    CHECK(held.seq == seq); // the frame being drawn must not change underneath
+    CHECK(held.traces[0].line == line);
+    CHECK(other.seq > seq);
 }

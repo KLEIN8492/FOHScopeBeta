@@ -37,7 +37,11 @@ public:
     void setPeakParams(PeakFinder::Params);
     void setSplOffset(double dB);
     void resetAveraging() { resetRequested.store(true); }
-    const Frame& latest() { return frames.read(); }
+    // Copies the newest published frame into `out`. A copy, not a reference: a reference into the
+    // triple buffer goes stale as soon as the message thread reads again (the old slot returns to
+    // the writer), and a callback still drawing it would see it torn. Keep one Frame per caller
+    // and pass it back in: the vectors keep their capacity, so steady-state copies don't allocate.
+    void latest(Frame& out) { out = frames.read(); }
     bool popSpectrogramColumn(float* out); // grid::kPoints values, dB re FS RMS (Fast)
 
     void tick(); // analysis thread (tests call it directly)

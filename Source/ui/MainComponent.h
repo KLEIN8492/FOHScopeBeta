@@ -63,6 +63,7 @@ private:
     juce::uint32 lastLogMs = 0;
     bool deviceLost = false;
     std::vector<float> column;
+    Frame frame; // the UI's own copy of the newest frame (message thread only)
 };
 
 } // namespace fs

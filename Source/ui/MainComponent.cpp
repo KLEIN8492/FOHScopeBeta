@@ -107,7 +107,8 @@ void MainComponent::apply(const Settings& s)
     updateWanted();
     settings.save();
     updateBar();
-    showFrame(analyser.latest(), true); // inputs / display changed: redraw even without new audio
+    analyser.latest(frame);
+    showFrame(frame, true); // inputs / display changed: redraw even without new audio
     if (settingsWindow) settingsWindow->refresh();
 }
 
@@ -143,7 +144,8 @@ void MainComponent::updateBar()
 
 void MainComponent::timerCallback()
 {
-    const auto& f = analyser.latest();
+    analyser.latest(frame);
+    const auto& f = frame;
     const bool fresh = f.seq != lastSeq;
     lastSeq = f.seq;
     if (fresh) logLevels(f); // logging never stops, even when the display is frozen
@@ -197,7 +199,8 @@ std::optional<float> MainComponent::loudestDb(const Frame& f) const
 
 void MainComponent::fitScale()
 {
-    if (const auto loud = loudestDb(analyser.latest()))
+    analyser.latest(frame);
+    if (const auto loud = loudestDb(frame))
         setScale(DbScale { settings.displayTop, settings.displayRange }.fittedTo(*loud));
 }
 
@@ -229,7 +232,8 @@ void MainComponent::logLevels(const Frame& f)
 
 void MainComponent::capture()
 {
-    const auto& f = analyser.latest();
+    analyser.latest(frame);
+    const auto& f = frame;
     const auto* in = settings.inputs.find(settings.inputs.focusedId);
     const auto* t = in ? f.trace(in->id) : nullptr;
     if (!t || !t->hasData) return;
@@ -247,7 +251,8 @@ void MainComponent::showSettings()
         h.get = [this]() -> const Settings& { return settings; };
         h.set = [this](const Settings& s) { apply(s); };
         h.splMicSlow = [this](int weighting) -> std::optional<double> {
-            const auto& f = analyser.latest();
+            analyser.latest(frame);
+    const auto& f = frame;
             if (!f.splValid) return std::nullopt;
             return f.spl.slow[size_t(juce::jlimit(0, 2, weighting))];
         };

@@ -27,7 +27,8 @@ TEST_CASE("probe: SignalGen ring timeline", "[.probe]")
         dev->pushTestBlock(&p, 1, 256);
         if (b % 8 == 0) {
             a.tick();
-            const auto& f = a.latest();
+            fs::Frame f;
+            a.latest(f);
             if (b % 64 == 0 && !f.traces.empty()) {
                 const size_t k = size_t(std::lround(fs::grid::indexOf(2500)));
                 std::cout << double(t) / sr << "s  line@2.5k " << f.traces[0].line[k] << "  peaks " << f.traces[0].peaks.size();
