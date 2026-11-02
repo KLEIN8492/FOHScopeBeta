@@ -82,5 +82,6 @@ Design docs: `docs/superpowers/specs/`, plans: `docs/superpowers/plans/`.
 | R | reset Inf averaging, peak hold, Leq-since-reset |
 | F | full screen |
 | Z | fit the dB scale to the material (AUTO in the bar keeps following) |
+| wheel over the spectrograph / End | scroll back through the last 15 min (view parks, recording continues) / back to live |
 | wheel / cmd+wheel / pinch | pan / zoom the dB scale (or drag the dB labels; double-click them to fit) |
 | CMD+, / CTRL+, | setup |

@@ -26,7 +26,7 @@ MainComponent::MainComponent()
     bar.onResolution = [this](int r) { auto s = settings; s.bandsPerOctave = r; apply(s); };
     bar.onBars = [this] { auto s = settings; s.showBars = !s.showBars; apply(s); };
     bar.onDelta = [this] { auto s = settings; s.showDelta = !s.showDelta; apply(s); };
-    bar.onFreeze = [this] { frozen = !frozen; updateBar(); repaint(0, 0, getWidth(), kStatusHeight); };
+    bar.onFreeze = [this] { frozen = !frozen; spectrograph.setFrozen(frozen); updateBar(); repaint(0, 0, getWidth(), kStatusHeight); };
     bar.onCapture = [this] { capture(); };
     bar.onClearCaptures = [this] { captures.clear(); updateBar(); spectrum.repaint(); };
     bar.onSettings = [this] { showSettings(); };
@@ -140,6 +140,11 @@ void MainComponent::updateBar()
     st.captures = int(captures.size());
     bar.setState(st);
     if (const auto* f = settings.inputs.find(settings.inputs.focusedId)) spectrograph.setLabel(f->name, f->colour);
+    // The spectrograph's history belongs to the focused input: another input starts a new one.
+    if (settings.inputs.focusedId != spectrographInput) {
+        spectrographInput = settings.inputs.focusedId;
+        spectrograph.clear();
+    }
 }
 
 void MainComponent::timerCallback()
@@ -162,7 +167,7 @@ void MainComponent::timerCallback()
 
     bool added = false;
     while (analyser.popSpectrogramColumn(column.data()))
-        if (!frozen) { spectrograph.addColumn(column.data()); added = true; }
+        { spectrograph.addColumn(column.data()); added = true; } // recorded even while frozen / scrolled back
     // 15 Hz is plenty for a scrolling heat map and halves its share of the drawing.
     if (added && ++spectrographDivider >= 2) {
         spectrographDivider = 0;
@@ -277,7 +282,8 @@ bool MainComponent::keyPressed(const juce::KeyPress& k)
     const auto c = juce::CharacterFunctions::toLowerCase(k.getTextCharacter());
     if (k.getModifiers().isCommandDown()) return false; // ⌘ shortcuts are menu commands (Main.cpp)
     auto s = settings;
-    if (k == juce::KeyPress::spaceKey) { frozen = !frozen; updateBar(); spectrum.repaint(); repaint(0, 0, getWidth(), kStatusHeight); return true; }
+    if (k == juce::KeyPress::spaceKey) { frozen = !frozen; spectrograph.setFrozen(frozen); updateBar(); spectrum.repaint(); repaint(0, 0, getWidth(), kStatusHeight); return true; }
+    if (k == juce::KeyPress::endKey) { spectrograph.goLive(); return true; }
     if (c == 'c') { capture(); return true; }
     if (c == 'x') { captures.clear(); updateBar(); spectrum.repaint(); return true; }
     if (c == 'b') { s.showBars = !s.showBars; apply(s); return true; }

@@ -64,6 +64,7 @@ private:
     bool deviceLost = false;
     std::vector<float> column;
     Frame frame; // the UI's own copy of the newest frame (message thread only)
+    int spectrographInput = -1; // input whose history the spectrograph holds
 };
 
 } // namespace fs
