@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- **SPL warm-up:** LAeq 15 min, LCeq 15 min and LAeq 1 min show dimmed with "WARMING 2:30 / 15:00"
+  until their window is full; limit colours stay on.
+- **Level log:** the 15-minute columns stay empty until the 15-minute window is full, so no
+  15-minute figure is built from a few seconds.
+
 ## 0.3.0
 
 - **Scrollable spectrograph:** keeps the last 15 minutes of the focused input. Scroll (wheel /
