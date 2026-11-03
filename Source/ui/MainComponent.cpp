@@ -1,4 +1,5 @@
 #include "ui/MainComponent.h"
+#include "core/LeqWarmup.h"
 
 namespace fs {
 
@@ -228,9 +229,13 @@ void MainComponent::logLevels(const Frame& f)
     lastLogMs = now;
     const auto& s = f.spl;
     const double o = f.splOffset;
+    // 15-minute columns stay empty until the window is full: no 15-minute figure built from seconds.
+    const int w15 = SplMeter::kWindows - 1;
+    const double covered = s.leqWindowSeconds[size_t(w15)];
+    const int window = SplMeter::kWindowSeconds[w15];
     LevelLogger::Row row { juce::Time::getCurrentTime(), s.leqWindow[0][1] + o, s.leqWindow[0][2] + o,
-                           s.leqWindow[SplMeter::kWindows - 1][1] + o, s.leqWindow[SplMeter::kWindows - 1][2] + o, s.cPeak + o,
-                           settings.calibration };
+                           leqForLog(s.leqWindow[size_t(w15)][1] + o, covered, window),
+                           leqForLog(s.leqWindow[size_t(w15)][2] + o, covered, window), s.cPeak + o, settings.calibration };
     juce::String err;
     logStatus = logger.append(row, err) ? juce::String() : err;
 }

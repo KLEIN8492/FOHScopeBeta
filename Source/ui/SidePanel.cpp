@@ -1,4 +1,5 @@
 #include "ui/SidePanel.h"
+#include "core/LeqWarmup.h"
 
 namespace fs {
 
@@ -67,7 +68,11 @@ void SidePanel::paintSpl(juce::Graphics& g, juce::Rectangle<int> r)
     big("LA Fast  dB SPL", s.fast[1] + off, 0);
 
     // limit > 0: VenueTuner limit colours on the value (amber within 3 dB, white on red over).
-    auto small = [&](const juce::String& name, double v, double limit = 0) {
+    // window ≥ 0: a sliding Leq (index into kWindowSeconds). While it has averaged less than its
+    // window the value is dimmed and a WARMING line says how much it covers; limit colours stay
+    // on, since a loud early figure is still a useful warning.
+    auto small = [&](const juce::String& name, double v, double limit = 0, int window = -1) {
+        const auto warm = window >= 0 ? leqWarmup(s.leqWindowSeconds[size_t(window)], SplMeter::kWindowSeconds[window]) : LeqWarmup { true, {} };
         auto row = r.removeFromTop(18);
         g.setColour(dim);
         g.setFont(mono(11));
@@ -78,15 +83,20 @@ void SidePanel::paintSpl(juce::Graphics& g, juce::Rectangle<int> r)
             g.setColour(red);
             g.fillRect(value);
         }
-        g.setColour(over ? juce::Colours::white : near ? amber : text);
+        g.setColour(over ? juce::Colours::white : near ? amber : warm.full ? text : dim);
         g.drawText(v > -100 ? juce::String(v, 1) : juce::String("--"), value.withTrimmedRight(over ? 4 : 0), juce::Justification::centredRight);
+        if (!warm.full) {
+            g.setColour(dim);
+            g.setFont(mono(9.5f));
+            g.drawText("  WARMING " + warm.text, r.removeFromTop(13), juce::Justification::centredLeft);
+        }
     };
     r.removeFromTop(4);
-    small("LAeq 15 MIN", s.leqWindow[size_t(w15)][1] + off, spl.limitLAeq15);
-    small("LCeq 15 MIN", s.leqWindow[size_t(w15)][2] + off, spl.limitLCeq15);
+    small("LAeq 15 MIN", s.leqWindow[size_t(w15)][1] + off, spl.limitLAeq15, w15);
+    small("LCeq 15 MIN", s.leqWindow[size_t(w15)][2] + off, spl.limitLCeq15, w15);
     r.removeFromTop(6);
     small("LC FAST", s.fast[2] + off);
-    small("LAeq 1 MIN", s.leqWindow[size_t(w1)][1] + off);
+    small("LAeq 1 MIN", s.leqWindow[size_t(w1)][1] + off, 0, w1);
     small("LCpeak MAX", s.cPeak + off);
     small("LA FAST MAX", s.maxFast[1] + off);
 
