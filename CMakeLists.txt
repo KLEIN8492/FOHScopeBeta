@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 # Must be set before project() or CMake ignores it.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
-project(FOHScope VERSION 0.2.0 LANGUAGES C CXX)
+project(FOHScope VERSION 0.3.0 LANGUAGES C CXX)
 
 # Windows: link the C++ runtime statically, so FOHScope.exe runs on a fresh Windows without the
 # VC++ redistributable. Set before any target (JUCE / Catch2 included).
